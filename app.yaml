@@ -1,0 +1,27 @@
+command: ['uv', 'run', 'lakebase-mcp']
+env:
+  # Lakebase connection (primary)
+  - name: LAKEBASE_HOST
+    valueFrom: secret
+  - name: LAKEBASE_DATABASE
+    valueFrom: secret
+  # Read replica (optional — leave empty if no replica)
+  - name: LAKEBASE_REPLICA_HOST
+    valueFrom: secret
+  # Safety
+  - name: LAKEBASE_ALLOW_WRITE
+    value: "false"
+  - name: LAKEBASE_MAX_ROWS
+    value: "1000"
+  - name: LAKEBASE_QUERY_TIMEOUT
+    value: "30"
+  # Scale-to-zero retry (autoscaling)
+  - name: LAKEBASE_S2Z_RETRY_ATTEMPTS
+    value: "5"
+  - name: LAKEBASE_S2Z_RETRY_DELAY
+    value: "0.5"
+  # Pool lifecycle (handles compute restarts)
+  - name: LAKEBASE_POOL_MAX_LIFETIME
+    value: "300"
+  - name: LAKEBASE_POOL_MAX_IDLE
+    value: "60"

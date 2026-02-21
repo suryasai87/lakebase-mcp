@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<evaluation>
+  <qa_pair>
+    <question>List all user-created schemas in the database, excluding PostgreSQL internal schemas. How many are there?</question>
+    <answer>Use lakebase_list_schemas. Count excludes pg_catalog, information_schema, pg_toast.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Find the table with the most rows in the public schema and describe its full schema including indexes.</question>
+    <answer>Chain lakebase_list_tables (sort by estimated_rows) then lakebase_describe_table on the largest.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Profile the customer table's data quality. What percentage of email addresses are null?</question>
+    <answer>Use lakebase_profile_table on the customer table, read null_pct for the email column.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Create a migration branch, add a 'last_login' timestamp column to the users table, verify it exists, then discard the migration.</question>
+    <answer>Chain lakebase_prepare_migration then lakebase_describe_table on branch then lakebase_complete_migration(apply=false).</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Set up a continuous sync pipeline from the Unity Catalog table 'analytics.ml.customer_features' to Lakebase for online feature serving.</question>
+    <answer>Use lakebase_create_sync with direction=delta_to_lakebase, frequency=continuous.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Check the compute status of the production branch. If CPU is above 80%, scale up the max CU to 16.</question>
+    <answer>Use lakebase_get_compute_status, then lakebase_get_compute_metrics, then lakebase_configure_autoscaling with max_cu=16.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Enable scale-to-zero with a 5-minute timeout on the dev branch to save costs.</question>
+    <answer>Use lakebase_configure_scale_to_zero(project_name=..., branch_name='dev', enabled=true, timeout_seconds=300).</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Create a read replica for the production branch with autoscaling from 1 to 4 CU to handle analytics queries.</question>
+    <answer>Use lakebase_create_read_replica(project_name=..., branch_name='production', min_cu=1, max_cu=4).</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Look up real-time features for customer_id='C-12345' from the features.customer_features table.</question>
+    <answer>Use lakebase_lookup_features with entity_keys={'customer_id': 'C-12345'}.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Explain the execution plan for a query joining orders and customers. Identify if any table scans could benefit from an index.</question>
+    <answer>Use lakebase_explain_query with analyze=true, examine Seq Scan nodes in the plan output.</answer>
+  </qa_pair>
+</evaluation>
