@@ -35,16 +35,17 @@ sql:
 tools:
   # Pre-built profile: read_only | analyst | developer | admin
   #   read_only:  sql_query, schema_read, project_read, branch_read,
-  #               compute_read, sync_read, quality, feature_read, insight
+  #               compute_read, sync_read, quality, feature_read, insight, uc_governance
   #   analyst:    same as read_only
   #   developer:  read_only + branch_write, compute_write, migration, sync_write
-  #   admin:      all categories
+  #   admin:      all categories (14 total)
   profile: "read_only"
 
   # Category-level overrides
   # Categories: sql_query, schema_read, project_read, branch_read,
   #             branch_write, compute_read, compute_write, migration,
-  #             sync_read, sync_write, quality, feature_read, insight
+  #             sync_read, sync_write, quality, feature_read, insight,
+  #             uc_governance
   # allowed_categories:
   #   - sql_query
   #   - schema_read
@@ -54,7 +55,7 @@ tools:
   #   - migration
 
   # Individual tool overrides (highest priority)
-  # All 27 tools:
+  # All 31 tools:
   #   sql_query:     lakebase_execute_query, lakebase_read_query, lakebase_explain_query
   #   schema_read:   lakebase_list_schemas, lakebase_list_tables, lakebase_describe_table, lakebase_object_tree
   #   project_read:  lakebase_list_projects, lakebase_describe_project, lakebase_get_connection_string
@@ -68,6 +69,7 @@ tools:
   #   quality:       lakebase_profile_table
   #   feature_read:  lakebase_lookup_features, lakebase_list_feature_tables
   #   insight:       lakebase_append_insight
+  #   uc_governance: lakebase_get_uc_permissions, lakebase_check_my_access, lakebase_governance_summary, lakebase_list_catalog_grants
   # allowed_tools: []
   denied_tools:
     - lakebase_execute_query    # Force agents to use read_query only

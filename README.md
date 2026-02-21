@@ -8,7 +8,7 @@ This server gives AI agents (Claude, GPT, Copilot, etc.) full control over Lakeb
 
 ## Key Capabilities
 
-- **27 tools** across 9 categories — query, schema, projects, branching, compute, migration, sync, quality, feature store
+- **31 tools** across 10 categories — query, schema, projects, branching, compute, migration, sync, quality, feature store, UC governance
 - **4 prompt templates** — guided workflows for exploration, migration, sync, and autoscaling tuning
 - **1 session resource** — `memo://insights` for accumulating observations during analysis
 - **Autoscaling-aware** — exponential backoff retry for scale-to-zero, read replica routing, compute lifecycle management
@@ -18,7 +18,7 @@ This server gives AI agents (Claude, GPT, Copilot, etc.) full control over Lakeb
 
 ---
 
-## Tool Reference (27 Tools)
+## Tool Reference (31 Tools)
 
 ### Query Tools (3)
 
@@ -90,6 +90,15 @@ This server gives AI agents (Claude, GPT, Copilot, etc.) full control over Lakeb
 |------|-------------|
 | `lakebase_lookup_features` | Low-latency (<10ms) feature point lookup by entity keys. Supports column selection |
 | `lakebase_list_feature_tables` | List all feature-serving tables in a schema with row counts and sizes |
+
+### Unity Catalog Governance Tools (4)
+
+| Tool | Description |
+|------|-------------|
+| `lakebase_get_uc_permissions` | Get effective UC permissions on any securable (catalog, schema, table). Shows direct and inherited grants with source |
+| `lakebase_check_my_access` | Check current user's effective privileges on a Lakebase catalog/schema/table. Shows SELECT, MODIFY, CREATE status |
+| `lakebase_governance_summary` | Combined view: MCP SQL governance + MCP tool governance + UC permissions. Recommends optimal profile |
+| `lakebase_list_catalog_grants` | List all grants on a catalog and its schemas. Shows which principals have what privileges |
 
 ### Insights (1 tool + 1 resource)
 
@@ -262,6 +271,49 @@ See [`governance.yaml.example`](governance.yaml.example) for the full reference.
 | `LAKEBASE_TOOL_ALLOWED` | comma-separated tool names | *(empty)* | Individual tool allow list |
 | `LAKEBASE_TOOL_DENIED` | comma-separated tool names | *(empty)* | Individual tool deny list |
 | `LAKEBASE_GOVERNANCE_CONFIG` | file path | *(empty)* | Path to governance.yaml |
+
+---
+
+## Unity Catalog Integration
+
+Lakebase MCP integrates with Unity Catalog governance at three levels:
+
+### Level 1: Permission Introspection
+
+Agents can query their own UC permissions before attempting operations:
+
+```
+> What can I access in the hls_amer_catalog?
+
+Agent calls: lakebase_governance_summary(catalog="hls_amer_catalog")
+
+Result:
+  SQL Governance: read_only (SELECT, SHOW, DESCRIBE, EXPLAIN)
+  Tool Access: all read-only tools
+  UC Privileges: SELECT, USE_CATALOG, USE_SCHEMA
+  Recommended profile: read_only or analyst
+```
+
+### Level 2: Federated Catalogs
+
+Lakebase databases are registered as **foreign catalogs** in Unity Catalog:
+- Schemas and tables appear in Catalog Explorer
+- UC grants (SELECT, MODIFY, etc.) control metadata access
+- Credential vending respects UC permissions
+- Row filters and column masks can be applied
+
+### Level 3: Three-Layer Access Control
+
+```
+Agent Request → MCP Tool Governance → SQL Statement Governance → UC Permission Check
+                (tool_guard.py)        (sql_guard.py)             (PostgreSQL + UC grants)
+
+Layer 1: Is the tool allowed?        (LAKEBASE_TOOL_PROFILE)
+Layer 2: Is the SQL type allowed?    (LAKEBASE_SQL_PROFILE)
+Layer 3: Does UC permit this object? (Unity Catalog grants)
+```
+
+All three layers must permit an operation for it to succeed.
 
 ---
 
@@ -441,7 +493,8 @@ lakebase-mcp/
 │   │   ├── migration.py     # 2 tools: prepare, complete
 │   │   ├── sync.py          # 2 tools: create sync, list syncs
 │   │   ├── quality.py       # 1 tool: profile table
-│   │   └── feature_store.py # 2 tools: lookup, list feature tables
+│   │   ├── feature_store.py # 2 tools: lookup, list feature tables
+│   │   └── uc_governance.py # 4 tools: UC permissions, access check, governance summary, catalog grants
 │   ├── resources/
 │   │   └── insights.py      # memo://insights resource + append tool
 │   ├── prompts/

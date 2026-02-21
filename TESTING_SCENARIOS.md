@@ -1,6 +1,6 @@
 # Lakebase MCP Server — Testing Scenarios
 
-Comprehensive testing guide covering all **27 tools**, **4 prompt templates**, **1 resource**, error handling, connection pool behavior, and end-to-end workflows.
+Comprehensive testing guide covering all **31 tools**, **4 prompt templates**, **1 resource**, governance, UC permissions, error handling, connection pool behavior, and end-to-end workflows.
 
 ---
 
@@ -842,6 +842,8 @@ Tests: Full MCP protocol compliance, tool invocation through the HTTP transport.
 | Governance — Tools | 17.1–17.4 | | | |
 | Governance — Profiles | 18.1–18.4 | | | |
 | Governance — Backward Compat | 19.1–19.2 | | | |
+| UC Governance Tools | 20.1–20.4 | | | |
+| UC + MCP Integration | 21.1–21.2 | | | |
 
 ---
 
@@ -1086,3 +1088,104 @@ export LAKEBASE_TOOL_DENIED=lakebase_execute_query
 3. All tools — work
 
 **Expected**: Identical behavior to pre-governance version with writes enabled.
+
+---
+
+## Scenario 20: Unity Catalog Governance Tools (4 tools)
+
+### 20.1 — `lakebase_get_uc_permissions` — Effective Permissions
+
+**Purpose**: Verify UC permission introspection for Lakebase objects.
+
+**Precondition**: Databricks SDK configured (DATABRICKS_HOST set).
+
+**Steps**:
+1. Call with `securable_type: "CATALOG"`, `full_name: "hls_amer_catalog"`
+2. Call with `securable_type: "SCHEMA"`, `full_name: "hls_amer_catalog.public"`
+3. Call with `securable_type: "TABLE"`, `full_name: "hls_amer_catalog.public.your_table"`
+4. Call with `principal: "your-email@company.com"` to filter by user
+
+**Expected**:
+- Step 1: Shows all principals with catalog-level grants (USE_CATALOG, ALL_PRIVILEGES, etc.)
+- Step 2: Shows schema-level grants plus inherited catalog grants
+- Step 3: Shows table-level grants (SELECT, MODIFY, etc.) with inheritance chain
+- Step 4: Filters to only the specified principal's grants
+
+### 20.2 — `lakebase_check_my_access`
+
+**Purpose**: Verify current user's own permission check.
+
+**Steps**:
+1. Call with `catalog: "hls_amer_catalog"` only (catalog-level)
+2. Call with `catalog: "hls_amer_catalog"`, `schema_name: "public"` (schema-level)
+3. Call with all three: `catalog`, `schema_name`, `table_name` (table-level)
+4. Call with a catalog you don't have access to
+
+**Expected**:
+- Steps 1-3: Returns "Your Access" summary with privileges, Can read/Can write/Can create summary
+- Step 4: Returns "no permissions" with GRANT recommendation SQL
+
+### 20.3 — `lakebase_governance_summary`
+
+**Purpose**: Verify combined governance view.
+
+**Setup**: `export LAKEBASE_SQL_PROFILE=analyst`, `export LAKEBASE_TOOL_PROFILE=read_only`
+
+**Steps**:
+1. Call with `catalog: "hls_amer_catalog"`
+2. Call without catalog (uses LAKEBASE_CATALOG env var)
+
+**Expected**:
+- Shows SQL Statement Governance section (allowed types: describe, explain, insert, select, set, show)
+- Shows Tool Access Governance section (tool restrictions active)
+- Shows UC Permissions section (user email, catalog privileges, recommended profile)
+
+### 20.4 — `lakebase_list_catalog_grants`
+
+**Purpose**: Verify catalog-wide grant listing for audit.
+
+**Steps**:
+1. Call with `catalog: "hls_amer_catalog"`, `include_schemas: true`
+2. Call with `include_schemas: false`
+
+**Expected**:
+- Step 1: Shows catalog-level grants table + per-schema grants tables (Principal | Privileges)
+- Step 2: Shows only catalog-level grants
+
+---
+
+## Scenario 21: UC Governance + MCP Governance Integration
+
+### 21.1 — Governance-Aware Exploration Workflow
+
+**Purpose**: End-to-end workflow using governance tools to guide exploration.
+
+**Setup**: `export LAKEBASE_SQL_PROFILE=read_only`, `export LAKEBASE_TOOL_PROFILE=read_only`
+
+**Steps**:
+1. `lakebase_governance_summary` — understand current permissions
+2. `lakebase_check_my_access` on target catalog — verify UC grants
+3. `lakebase_list_schemas` — discover available schemas
+4. `lakebase_list_tables` — find tables
+5. `lakebase_read_query` with SELECT — query data (allowed by read_only)
+6. `lakebase_execute_query` with INSERT — should FAIL (blocked by SQL governance)
+
+**Expected**: Agent can introspect permissions, explore data, but cannot modify.
+
+### 21.2 — Three-Layer Enforcement
+
+**Purpose**: Verify all three governance layers work together.
+
+**Setup**:
+```bash
+export LAKEBASE_SQL_PROFILE=developer
+export LAKEBASE_TOOL_PROFILE=developer
+# UC: user has SELECT but NOT MODIFY on the catalog
+```
+
+**Steps**:
+1. `lakebase_governance_summary` — shows developer SQL profile, developer tool profile, UC SELECT-only
+2. `lakebase_execute_query` with `INSERT INTO table VALUES (1)` — MCP allows (developer), but UC/PostgreSQL may deny
+3. `lakebase_check_my_access` — confirms SELECT-only UC grants
+
+**Expected**: MCP governance permits the operation but UC/PostgreSQL layer enforces actual data access control.

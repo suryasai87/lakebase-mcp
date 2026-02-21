@@ -10,7 +10,7 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 
-# Tool categories for bulk allow/deny — all 27 tools + 1 resource tool
+# Tool categories for bulk allow/deny — all 31 tools + 1 resource tool
 TOOL_CATEGORIES: dict[str, list[str]] = {
     "sql_query": [
         "lakebase_execute_query",
@@ -65,6 +65,12 @@ TOOL_CATEGORIES: dict[str, list[str]] = {
     "insight": [
         "lakebase_append_insight",
     ],
+    "uc_governance": [
+        "lakebase_get_uc_permissions",
+        "lakebase_check_my_access",
+        "lakebase_governance_summary",
+        "lakebase_list_catalog_grants",
+    ],
 }
 
 # Pre-built tool profiles (composable with SQL profiles)
@@ -79,6 +85,7 @@ TOOL_PROFILES: dict[str, list[str]] = {
         "quality",
         "feature_read",
         "insight",
+        "uc_governance",  # Always allow permission introspection
     ],
     "analyst": [
         "sql_query",
@@ -90,6 +97,7 @@ TOOL_PROFILES: dict[str, list[str]] = {
         "quality",
         "feature_read",
         "insight",
+        "uc_governance",
     ],
     "developer": [
         "sql_query",
@@ -105,6 +113,7 @@ TOOL_PROFILES: dict[str, list[str]] = {
         "quality",
         "feature_read",
         "insight",
+        "uc_governance",
     ],
     "admin": list(TOOL_CATEGORIES.keys()),
 }
