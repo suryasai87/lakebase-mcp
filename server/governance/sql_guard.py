@@ -41,6 +41,7 @@ class SQLStatementType(str, Enum):
 
 
 # Map sqlglot expression types to our statement types
+# Note: sqlglot v28+ uses exp.Alter (not AlterTable), exp.TruncateTable, exp.Grant
 _EXPRESSION_MAP: dict[type, SQLStatementType] = {
     exp.Select: SQLStatementType.SELECT,
     exp.Union: SQLStatementType.SELECT,
@@ -51,9 +52,11 @@ _EXPRESSION_MAP: dict[type, SQLStatementType] = {
     exp.Delete: SQLStatementType.DELETE,
     exp.Create: SQLStatementType.CREATE,
     exp.Drop: SQLStatementType.DROP,
-    exp.AlterTable: SQLStatementType.ALTER,
+    exp.Alter: SQLStatementType.ALTER,
     exp.AlterColumn: SQLStatementType.ALTER,
     exp.Merge: SQLStatementType.MERGE,
+    exp.TruncateTable: SQLStatementType.TRUNCATE,
+    exp.Grant: SQLStatementType.GRANT,
 }
 
 # Pre-built profiles
@@ -192,12 +195,12 @@ class SQLGovernor:
             if isinstance(node, expr_type):
                 return stmt_type
 
-        # Handle Command expressions (TRUNCATE, GRANT, REVOKE, SHOW, etc.)
+        # Handle Command expressions (EXPLAIN, SHOW, REVOKE, CALL, etc.)
+        # In sqlglot v28+, EXPLAIN and SHOW are parsed as Command nodes.
         if isinstance(node, exp.Command):
             cmd = node.this.upper() if isinstance(node.this, str) else ""
             cmd_map = {
-                "TRUNCATE": SQLStatementType.TRUNCATE,
-                "GRANT": SQLStatementType.GRANT,
+                "EXPLAIN": SQLStatementType.EXPLAIN,
                 "REVOKE": SQLStatementType.REVOKE,
                 "SHOW": SQLStatementType.SHOW,
                 "SET": SQLStatementType.SET,
@@ -216,10 +219,6 @@ class SQLGovernor:
         # Use
         if isinstance(node, exp.Use):
             return SQLStatementType.USE
-
-        # Explain wraps another statement
-        if isinstance(node, exp.Explain):
-            return SQLStatementType.EXPLAIN
 
         logger.debug(f"Unrecognized expression type: {type(node).__name__}")
         return None

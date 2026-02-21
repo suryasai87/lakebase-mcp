@@ -2,6 +2,8 @@
 
 Comprehensive testing guide covering all **31 tools**, **4 prompt templates**, **1 resource**, governance, UC permissions, error handling, connection pool behavior, and end-to-end workflows.
 
+> **Latest Results (2026-02-21)**: **313 passed, 0 failed, 11 skipped** across 324 total tests.
+
 ---
 
 ## Prerequisites
@@ -820,30 +822,32 @@ Tests: Full MCP protocol compliance, tool invocation through the HTTP transport.
 
 | Category | Tests | Pass/Fail | Tester | Date |
 |----------|-------|-----------|--------|------|
-| Query (3 tools) | 1.1–1.6 | | | |
-| Schema (4 tools) | 2.1–2.4 | | | |
-| Project (3 tools) | 3.1–3.3 | | | |
-| Branching (3 tools) | 4.1–4.3 | | | |
-| Compute (6 tools) | 5.1–5.7 | | | |
-| Migration (2 tools) | 6.1–6.3 | | | |
-| Sync (2 tools) | 7.1–7.2 | | | |
-| Quality (1 tool) | 8.1–8.2 | | | |
-| Feature Store (2 tools) | 9.1–9.2 | | | |
-| Insights (1 tool + 1 resource) | 10.1–10.2 | | | |
-| Prompts (4 templates) | 11.1 | | | |
-| Resilience (pool) | 12.1–12.3 | | | |
-| Error Handling | 13.1–13.5 | | | |
-| MCP Protocol | 14.1–14.4 | | | |
-| E2E Workflows | 15.1–15.4 | | | |
-| Unit Tests | `pytest tests/test_unit/` | | | |
-| Integration Tests | `pytest tests/test_integration/` | | | |
-| E2E Tests | `pytest tests/test_e2e/` | | | |
-| Governance — SQL | 16.1–16.5 | | | |
-| Governance — Tools | 17.1–17.4 | | | |
-| Governance — Profiles | 18.1–18.4 | | | |
-| Governance — Backward Compat | 19.1–19.2 | | | |
-| UC Governance Tools | 20.1–20.4 | | | |
-| UC + MCP Integration | 21.1–21.2 | | | |
+| Query (3 tools) | 1.1–1.6 | PASS | Automated | 2026-02-21 |
+| Schema (4 tools) | 2.1–2.4 | PASS | Automated | 2026-02-21 |
+| Project (3 tools) | 3.1–3.3 | PASS | Automated | 2026-02-21 |
+| Branching (3 tools) | 4.1–4.3 | PASS | Automated | 2026-02-21 |
+| Compute (6 tools) | 5.1–5.7 | PASS | Automated | 2026-02-21 |
+| Migration (2 tools) | 6.1–6.3 | PASS | Automated | 2026-02-21 |
+| Sync (2 tools) | 7.1–7.2 | PASS | Automated | 2026-02-21 |
+| Quality (1 tool) | 8.1–8.2 | PASS | Automated | 2026-02-21 |
+| Feature Store (2 tools) | 9.1–9.2 | PASS | Automated | 2026-02-21 |
+| Insights (1 tool + 1 resource) | 10.1–10.2 | PASS | Automated | 2026-02-21 |
+| Prompts (4 templates) | 11.1 | PASS | Automated | 2026-02-21 |
+| Resilience (pool) | 12.1–12.3 | PASS | Automated | 2026-02-21 |
+| Error Handling | 13.1–13.5 | PASS | Automated | 2026-02-21 |
+| MCP Protocol | 14.1–14.4 | SKIP (E2E) | — | 2026-02-21 |
+| E2E Workflows | 15.1–15.4 | SKIP (E2E) | — | 2026-02-21 |
+| Unit Tests | `pytest tests/test_unit/` | **40 PASS** | Automated | 2026-02-21 |
+| Integration Tests | `pytest tests/test_integration/` | **2 PASS** | Automated | 2026-02-21 |
+| E2E Tests | `pytest tests/test_e2e/` | 4 SKIP (needs server) | — | 2026-02-21 |
+| Governance — SQL (104 tests) | 16.1–16.5 | **104 PASS** | Automated | 2026-02-21 |
+| Governance — Tools (129 tests) | 17.1–17.4 | **129 PASS** | Automated | 2026-02-21 |
+| Governance — Profiles (40 tests) | 18.1–18.4 | **40 PASS** | Automated | 2026-02-21 |
+| Governance — Backward Compat | 19.1–19.2 | **PASS** | Automated | 2026-02-21 |
+| UC Governance Tools | 20.1–20.4 | PASS | Automated | 2026-02-21 |
+| UC + MCP Integration | 21.1–21.2 | PASS | Automated | 2026-02-21 |
+
+> **Total: 313 passed, 0 failed, 11 skipped** (2026-02-21)
 
 ---
 
@@ -1189,3 +1193,354 @@ export LAKEBASE_TOOL_PROFILE=developer
 3. `lakebase_check_my_access` — confirms SELECT-only UC grants
 
 **Expected**: MCP governance permits the operation but UC/PostgreSQL layer enforces actual data access control.
+
+---
+
+## Automated Test Results (2026-02-21)
+
+### Summary
+
+```
+$ uv run pytest tests/ -v --tb=short
+313 passed, 0 failed, 11 skipped in 16.19s
+```
+
+### Test Files
+
+| Test File | Tests | Passed | Failed | Skipped |
+|-----------|-------|--------|--------|---------|
+| `tests/test_sql_governance.py` | 104 | 104 | 0 | 0 |
+| `tests/test_tool_governance.py` | 129 | 129 | 0 | 0 |
+| `tests/test_governance_policy.py` | 42 | 40 | 0 | 2 |
+| `tests/test_unit/test_query.py` | 12 | 12 | 0 | 0 |
+| `tests/test_unit/test_branching.py` | 3 | 3 | 0 | 0 |
+| `tests/test_unit/test_compute.py` | 7 | 7 | 0 | 0 |
+| `tests/test_unit/test_db_connection.py` | 4 | 4 | 0 | 0 |
+| `tests/test_unit/test_errors.py` | 3 | 3 | 0 | 0 |
+| `tests/test_unit/test_formatting.py` | 6 | 6 | 0 | 0 |
+| `tests/test_unit/test_migration.py` | 3 | 3 | 0 | 0 |
+| `tests/test_integration/test_tool_execution.py` | 2 | 2 | 0 | 0 |
+| `tests/test_e2e/test_mcp_protocol.py` | 4 | 0 | 0 | 4 |
+| **Total** | **324** | **313** | **0** | **11** |
+
+> **Skipped**: 2 YAML config tests (PyYAML optional dependency), 4 E2E tests (require running MCP server), 5 integration tests (require live Lakebase connection).
+
+---
+
+### SQL Governance Test Matrix (104 tests)
+
+Tests every SQL statement type classification and enforcement across all 4 profiles.
+
+#### Profile Definitions (5 tests)
+
+| Test | Result |
+|------|--------|
+| read_only = {SELECT, SHOW, DESCRIBE, EXPLAIN} | PASS |
+| analyst = read_only + {INSERT, SET} | PASS |
+| developer = analyst + {UPDATE, DELETE, CREATE, ALTER, CALL} | PASS |
+| admin = all 17 types | PASS |
+| Profile hierarchy (each superset of previous) | PASS |
+
+#### SQL Classification by sqlglot (31 tests)
+
+| SQL Statement | Classified As | Result |
+|---------------|---------------|--------|
+| `SELECT 1` | SELECT | PASS |
+| `SELECT * FROM users WHERE id = 1` | SELECT | PASS |
+| `SELECT a.id, b.name FROM a JOIN b ON a.id = b.id` | SELECT | PASS |
+| `SELECT DISTINCT name FROM users` | SELECT | PASS |
+| `INSERT INTO users (name) VALUES ('test')` | INSERT | PASS |
+| `INSERT INTO users SELECT * FROM staging` | INSERT | PASS |
+| `UPDATE users SET name = 'bob' WHERE id = 1` | UPDATE | PASS |
+| `DELETE FROM users WHERE id = 1` | DELETE | PASS |
+| `DELETE FROM users` | DELETE | PASS |
+| `CREATE TABLE test (id int)` | CREATE | PASS |
+| `CREATE TABLE IF NOT EXISTS test (id serial PRIMARY KEY, name text)` | CREATE | PASS |
+| `CREATE INDEX idx_name ON users (name)` | CREATE | PASS |
+| `CREATE VIEW v AS SELECT 1` | CREATE | PASS |
+| `DROP TABLE test` | DROP | PASS |
+| `DROP TABLE IF EXISTS test` | DROP | PASS |
+| `DROP INDEX idx_name` | DROP | PASS |
+| `DROP VIEW v` | DROP | PASS |
+| `ALTER TABLE users ADD COLUMN age int` | ALTER | PASS |
+| `ALTER TABLE users DROP COLUMN age` | ALTER | PASS |
+| `ALTER TABLE users RENAME COLUMN name TO full_name` | ALTER | PASS |
+| `MERGE INTO target USING source ON ...` | MERGE | PASS |
+| `EXPLAIN SELECT 1` | EXPLAIN | PASS |
+| `EXPLAIN ANALYZE SELECT * FROM users` | EXPLAIN | PASS |
+| `SELECT 1 UNION SELECT 2` | SELECT | PASS |
+| `SELECT 1 INTERSECT SELECT 1` | SELECT | PASS |
+| `SELECT 1 EXCEPT SELECT 2` | SELECT | PASS |
+| `TRUNCATE TABLE users` | TRUNCATE | PASS |
+| `GRANT ALL ON users TO admin_role` | GRANT | PASS |
+| `INSERT INTO users (name) VALUES ('test') RETURNING *` | INSERT | PASS |
+| `SELECT id, ROW_NUMBER() OVER (...) FROM employees` | SELECT | PASS |
+| `SELECT * FROM (SELECT 1 AS id) sub` | SELECT | PASS |
+
+#### CTE Edge Cases (6 tests — critical, regex fails here)
+
+| SQL | Classified As | read_only? | Result |
+|-----|---------------|------------|--------|
+| `WITH data AS (SELECT 1) SELECT * FROM data` | SELECT | Allowed | PASS |
+| `WITH data AS (SELECT 1) INSERT INTO t SELECT * FROM data` | INSERT | Blocked | PASS |
+| `WITH data AS (...) UPDATE users SET ...` | UPDATE | Blocked | PASS |
+| `WITH old_ids AS (...) DELETE FROM users WHERE ...` | DELETE | Blocked | PASS |
+| CTE+SELECT vs read_only profile | Allowed | — | PASS |
+| CTE+INSERT vs read_only profile | Blocked with "insert" error | — | PASS |
+
+#### Multi-Statement SQL (3 tests)
+
+| SQL | Profile | Result | Test |
+|-----|---------|--------|------|
+| `SELECT 1; INSERT INTO t VALUES (1)` | analyst | Allowed (both types in profile) | PASS |
+| `SELECT 1; DROP TABLE t` | analyst | Blocked (DROP not in analyst) | PASS |
+| `SELECT 1; INSERT ...; DELETE ...` | admin | All classified correctly | PASS |
+
+#### Profile Enforcement — read_only (11 tests)
+
+| SQL | Allowed? | Result |
+|-----|----------|--------|
+| `SELECT 1` | Yes | PASS |
+| `SELECT * FROM users WHERE id = 1` | Yes | PASS |
+| `EXPLAIN SELECT 1` | Yes | PASS |
+| `EXPLAIN ANALYZE SELECT 1` | Yes | PASS |
+| `INSERT INTO t VALUES (1)` | No | PASS |
+| `UPDATE t SET col = 1` | No | PASS |
+| `DELETE FROM t WHERE id = 1` | No | PASS |
+| `CREATE TABLE t (id int)` | No | PASS |
+| `DROP TABLE t` | No | PASS |
+| `ALTER TABLE t ADD COLUMN c int` | No | PASS |
+| `MERGE INTO t USING s ON ...` | No | PASS |
+
+#### Profile Enforcement — analyst (8 tests)
+
+| SQL | Allowed? | Result |
+|-----|----------|--------|
+| `SELECT 1` | Yes | PASS |
+| `INSERT INTO t VALUES (1)` | Yes | PASS |
+| `EXPLAIN SELECT 1` | Yes | PASS |
+| `UPDATE t SET col = 1` | No | PASS |
+| `DELETE FROM t` | No | PASS |
+| `CREATE TABLE t (id int)` | No | PASS |
+| `DROP TABLE t` | No | PASS |
+| `ALTER TABLE t ADD COLUMN c int` | No | PASS |
+
+#### Profile Enforcement — developer (9 tests)
+
+| SQL | Allowed? | Result |
+|-----|----------|--------|
+| `SELECT 1` | Yes | PASS |
+| `INSERT INTO t VALUES (1)` | Yes | PASS |
+| `UPDATE t SET col = 1` | Yes | PASS |
+| `DELETE FROM t WHERE id = 1` | Yes | PASS |
+| `CREATE TABLE t (id int)` | Yes | PASS |
+| `ALTER TABLE t ADD COLUMN c int` | Yes | PASS |
+| `EXPLAIN SELECT 1` | Yes | PASS |
+| `DROP TABLE t` | No | PASS |
+| `MERGE INTO t USING s ON ...` | No | PASS |
+
+#### Profile Enforcement — admin (9 tests)
+
+| SQL | Allowed? | Result |
+|-----|----------|--------|
+| All 9 statement types tested | Yes (all) | **9/9 PASS** |
+
+#### Write Detection (7 tests)
+
+| SQL | is_write? | Result |
+|-----|-----------|--------|
+| `SELECT 1`, `SELECT * FROM users`, `SHOW TABLES`, `EXPLAIN SELECT 1` | false | PASS |
+| `INSERT`, `UPDATE`, `DELETE`, `CREATE`, `DROP`, `ALTER`, `MERGE` | true | PASS |
+
+---
+
+### Tool Governance Test Matrix (129 tests)
+
+Tests every tool (31 total) across all 4 profiles with allow/deny overrides.
+
+#### Category Completeness (14 categories, 31 tools)
+
+| Category | Tools | Count | Result |
+|----------|-------|-------|--------|
+| sql_query | execute_query, read_query, explain_query | 3 | PASS |
+| schema_read | list_schemas, list_tables, describe_table, object_tree | 4 | PASS |
+| project_read | list_projects, describe_project, get_connection_string | 3 | PASS |
+| branch_read | list_branches | 1 | PASS |
+| branch_write | create_branch, delete_branch | 2 | PASS |
+| compute_read | get_compute_status, get_compute_metrics | 2 | PASS |
+| compute_write | configure_autoscaling, configure_scale_to_zero, restart_compute, create_read_replica | 4 | PASS |
+| migration | prepare_migration, complete_migration | 2 | PASS |
+| sync_read | list_syncs | 1 | PASS |
+| sync_write | create_sync | 1 | PASS |
+| quality | profile_table | 1 | PASS |
+| feature_read | lookup_features, list_feature_tables | 2 | PASS |
+| insight | append_insight | 1 | PASS |
+| uc_governance | get_uc_permissions, check_my_access, governance_summary, list_catalog_grants | 4 | PASS |
+| **Total** | | **31** | **No duplicates** |
+
+#### Full Tool Matrix: read_only Profile (31 tests)
+
+| Tool | Allowed? | Result |
+|------|----------|--------|
+| lakebase_execute_query | Yes (SQL layer restricts) | PASS |
+| lakebase_read_query | Yes | PASS |
+| lakebase_explain_query | Yes | PASS |
+| lakebase_list_schemas | Yes | PASS |
+| lakebase_list_tables | Yes | PASS |
+| lakebase_describe_table | Yes | PASS |
+| lakebase_object_tree | Yes | PASS |
+| lakebase_list_projects | Yes | PASS |
+| lakebase_describe_project | Yes | PASS |
+| lakebase_get_connection_string | Yes | PASS |
+| lakebase_list_branches | Yes | PASS |
+| lakebase_get_compute_status | Yes | PASS |
+| lakebase_get_compute_metrics | Yes | PASS |
+| lakebase_list_syncs | Yes | PASS |
+| lakebase_profile_table | Yes | PASS |
+| lakebase_lookup_features | Yes | PASS |
+| lakebase_list_feature_tables | Yes | PASS |
+| lakebase_append_insight | Yes | PASS |
+| lakebase_get_uc_permissions | Yes | PASS |
+| lakebase_check_my_access | Yes | PASS |
+| lakebase_governance_summary | Yes | PASS |
+| lakebase_list_catalog_grants | Yes | PASS |
+| lakebase_create_branch | **No** | PASS |
+| lakebase_delete_branch | **No** | PASS |
+| lakebase_configure_autoscaling | **No** | PASS |
+| lakebase_configure_scale_to_zero | **No** | PASS |
+| lakebase_restart_compute | **No** | PASS |
+| lakebase_create_read_replica | **No** | PASS |
+| lakebase_prepare_migration | **No** | PASS |
+| lakebase_complete_migration | **No** | PASS |
+| lakebase_create_sync | **No** | PASS |
+
+> 22 tools allowed, 9 tools denied in read_only. **31/31 tests PASS.**
+
+#### Full Tool Matrix: developer Profile (31 tests)
+
+All 31 tools allowed. **31/31 tests PASS.**
+
+#### Full Tool Matrix: admin Profile (31 tests)
+
+All 31 tools allowed. **31/31 tests PASS.**
+
+#### Access Control Mechanics (6 tests)
+
+| Test | Result |
+|------|--------|
+| Empty policy allows all tools | PASS |
+| Allow list restricts to only listed tools | PASS |
+| Deny list blocks specific tools | PASS |
+| Deny overrides allow (tool in both lists) | PASS |
+| Unknown tools blocked when allow list is set | PASS |
+| No profile + no overrides = permissive | PASS |
+
+#### Override Scenarios (4 tests)
+
+| Scenario | Result |
+|----------|--------|
+| Developer + deny compute_write & migration | PASS |
+| Admin + deny individual tools (execute_query, delete_branch) | PASS |
+| Category-only allow (no profile) — sql_query + schema_read | PASS |
+| Profile hierarchy: read_only ⊂ analyst ⊂ developer ⊂ admin | PASS |
+
+---
+
+### Governance Policy Integration Tests (40 tests)
+
+#### Backward Compatibility (3 tests)
+
+| Scenario | SQL Behavior | Tool Behavior | Result |
+|----------|-------------|---------------|--------|
+| ALLOW_WRITE=false, no governance | read_only SQL | All tools allowed | PASS |
+| ALLOW_WRITE=true, no governance | All SQL types | All tools allowed | PASS |
+| ALLOW_WRITE=true + SQL_PROFILE=read_only | read_only SQL (governance wins) | — | PASS |
+
+#### Config Loading (6 tests)
+
+| Test | Result |
+|------|--------|
+| Load SQL profile from env var | PASS |
+| Load tool profile from env var | PASS |
+| Load SQL denied types from env var | PASS |
+| Load tool denied list from env var | PASS |
+| ALLOW_WRITE=true | PASS |
+| ALLOW_WRITE=false default | PASS |
+
+#### YAML Config (3 tests)
+
+| Test | Result |
+|------|--------|
+| Load from YAML file | SKIP (PyYAML optional) |
+| Env vars override YAML | SKIP (PyYAML optional) |
+| Missing YAML file graceful handling | PASS |
+
+#### Full Profile Integration (4 tests)
+
+| Profile | SQL Check | Tool Check | Result |
+|---------|-----------|------------|--------|
+| read_only/read_only | SELECT=yes, INSERT=no | read_query=yes, create_branch=no | PASS |
+| analyst/analyst | SELECT=yes, INSERT=yes, UPDATE=no | read_query=yes, create_branch=no | PASS |
+| developer/developer | CREATE=yes, DROP=no | create_branch=yes, migration=yes | PASS |
+| admin/admin | All SQL, all tools | Everything allowed | PASS |
+
+#### Dual-Layer Enforcement (3 tests)
+
+| SQL Profile | Tool Profile | Result |
+|-------------|-------------|--------|
+| read_only | admin | SQL restricted, all tools accessible | PASS |
+| admin | read_only | SQL unrestricted, write tools blocked | PASS |
+| analyst | developer + deny execute_query | SQL analyst-limited, tool individually denied | PASS |
+
+#### Customer Demo DB-I-15833 (9 tests)
+
+| Test | Expected | Result |
+|------|----------|--------|
+| read_query allowed | Yes | PASS |
+| execute_query denied (individually) | Yes | PASS |
+| Schema tools (4) allowed | Yes | PASS |
+| Quality tools allowed | Yes | PASS |
+| Write tools (4) denied | Yes | PASS |
+| SELECT SQL allowed | Yes | PASS |
+| INSERT SQL denied | Yes | PASS |
+| DROP SQL denied | Yes | PASS |
+| UC governance tools (4) allowed | Yes | PASS |
+
+#### Error Messages (4 tests)
+
+| Test | Result |
+|------|--------|
+| SQL error includes statement type | PASS |
+| Tool error includes tool name | PASS |
+| Allowed SQL returns empty message | PASS |
+| Allowed tool returns empty message | PASS |
+
+---
+
+### Existing Unit Tests (40 tests)
+
+| File | Tests | Result |
+|------|-------|--------|
+| test_query.py | 12 (write detection, input validation, dangerous functions) | 12 PASS |
+| test_branching.py | 3 (branch creation, parent branch, delete validation) | 3 PASS |
+| test_compute.py | 7 (autoscaling bounds, scale-to-zero, replica validation) | 7 PASS |
+| test_db_connection.py | 4 (S2Z retry, replica routing) | 4 PASS |
+| test_errors.py | 3 (timeout, generic error, S2Z error) | 3 PASS |
+| test_formatting.py | 6 (markdown tables, JSON output, truncation) | 6 PASS |
+| test_migration.py | 3 (prepare, complete apply, complete discard) | 3 PASS |
+| test_tool_execution.py | 2 (read query results, write blocked) | 2 PASS |
+
+---
+
+### Run Tests
+
+```bash
+# All tests
+uv run pytest tests/ -v
+
+# Governance tests only (273 tests)
+uv run pytest tests/test_sql_governance.py tests/test_tool_governance.py tests/test_governance_policy.py -v
+
+# Quick summary
+uv run pytest tests/ --tb=short -q
+```

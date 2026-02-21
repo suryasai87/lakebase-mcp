@@ -1,33 +1,37 @@
-"""Unit tests for SQL query tools."""
+"""Unit tests for SQL query tools — updated for sqlglot governance."""
 import pytest
-from server.tools.query import ExecuteQueryInput, WRITE_PATTERNS
+from server.tools.query import ExecuteQueryInput
+from server.governance.sql_guard import SQLGovernor, PROFILES
 from server.utils.formatting import ResponseFormat
 
 
 class TestWriteDetection:
-    def test_select_is_not_write(self):
-        assert not WRITE_PATTERNS.match("SELECT * FROM users")
+    """Write detection now uses SQLGovernor.is_write() instead of WRITE_PATTERNS regex."""
 
-    def test_insert_is_write(self):
-        assert WRITE_PATTERNS.match("INSERT INTO users VALUES (1, 'test')")
+    @pytest.fixture
+    def gov(self):
+        return SQLGovernor(PROFILES["admin"])
 
-    def test_update_is_write(self):
-        assert WRITE_PATTERNS.match("UPDATE users SET name = 'test'")
+    def test_select_is_not_write(self, gov):
+        assert not gov.is_write("SELECT * FROM users")
 
-    def test_delete_is_write(self):
-        assert WRITE_PATTERNS.match("DELETE FROM users WHERE id = 1")
+    def test_insert_is_write(self, gov):
+        assert gov.is_write("INSERT INTO users VALUES (1, 'test')")
 
-    def test_drop_is_write(self):
-        assert WRITE_PATTERNS.match("DROP TABLE users")
+    def test_update_is_write(self, gov):
+        assert gov.is_write("UPDATE users SET name = 'test'")
 
-    def test_create_is_write(self):
-        assert WRITE_PATTERNS.match("CREATE TABLE test (id int)")
+    def test_delete_is_write(self, gov):
+        assert gov.is_write("DELETE FROM users WHERE id = 1")
 
-    def test_with_leading_whitespace(self):
-        assert WRITE_PATTERNS.match("  INSERT INTO users VALUES (1)")
+    def test_drop_is_write(self, gov):
+        assert gov.is_write("DROP TABLE users")
 
-    def test_case_insensitive(self):
-        assert WRITE_PATTERNS.match("insert into users values (1)")
+    def test_create_is_write(self, gov):
+        assert gov.is_write("CREATE TABLE test (id int)")
+
+    def test_case_insensitive(self, gov):
+        assert gov.is_write("insert into users values (1)")
 
 
 class TestQueryInputValidation:
