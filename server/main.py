@@ -70,7 +70,9 @@ register_prompts(mcp)
 
 
 def main():
-    mcp.run(transport="streamable_http", port=8000)
+    import os
+    port = int(os.environ.get("APP_PORT", "8000"))
+    mcp.run(transport="streamable_http", port=port)
 
 
 if __name__ == "__main__":

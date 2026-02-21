@@ -12,7 +12,7 @@ w.api_client.do(
             "sync, migration, quality, feature store, compute management, "
             "autoscaling, scale-to-zero, read replicas"
         ),
-        "server_url": "https://<app-url>/mcp",
+        "server_url": "https://lakebase-mcp-server-1602460480284688.aws.databricksapps.com/mcp",
         "auth_type": "DATABRICKS_OAUTH",
     },
 )
