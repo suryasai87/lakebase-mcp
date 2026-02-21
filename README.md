@@ -6,31 +6,169 @@ This server gives AI agents (Claude, GPT, Copilot, etc.) full control over Lakeb
 
 ---
 
-## Features
+## Key Capabilities
 
-| Category | Tools | What They Do |
-|----------|-------|--------------|
-| **Query** | 3 | Execute read/write SQL, explain query plans |
-| **Schema** | 4 | List schemas/tables, describe columns/indexes, browse object tree |
-| **Project** | 3 | List projects, describe project details, get connection strings |
-| **Branching** | 3 | Create/list/delete branches for dev/test isolation |
-| **Compute** | 6 | Autoscaling, scale-to-zero, metrics, restart, read replicas |
-| **Migration** | 2 | Branch-based safe schema migrations (prepare + apply/discard) |
-| **Sync** | 2 | Delta Lake <-> Lakebase data synchronization |
-| **Quality** | 1 | Per-column data profiling (nulls, cardinality, min/max) |
-| **Feature Store** | 2 | Low-latency feature lookup, list feature tables |
-| **Insights** | 1 | Append observations to a session memo |
-| **Total** | **27 tools** | + 4 prompt templates + 1 resource |
+- **27 tools** across 9 categories — query, schema, projects, branching, compute, migration, sync, quality, feature store
+- **4 prompt templates** — guided workflows for exploration, migration, sync, and autoscaling tuning
+- **1 session resource** — `memo://insights` for accumulating observations during analysis
+- **Autoscaling-aware** — exponential backoff retry for scale-to-zero, read replica routing, compute lifecycle management
+- **Safety-first** — write guard, dangerous function blocking, production branch protection, read-only transaction enforcement
+- **Dual output** — markdown tables (human-friendly) or JSON (programmatic) for every tool
+- **Fully async** — built on FastMCP with `psycopg` 3.x async connection pooling
 
-### Autoscaling-Aware Design
+---
 
-This server is built specifically for Lakebase Autoscaling:
+## Tool Reference (27 Tools)
 
-- **Scale-to-zero retry**: Exponential backoff when compute is waking from suspension (~hundreds of ms)
-- **Read replica routing**: Read-only queries automatically route to the replica pool
-- **Compute management**: 6 tools to monitor, configure, and optimize autoscaling
-- **Connection health**: Pool pre-checks, max lifetime rotation, idle connection cleanup
-- **Autoscaling-aware errors**: Distinguishes compute wake-up from actual failures
+### Query Tools (3)
+
+| Tool | Description | Read-Only |
+|------|-------------|-----------|
+| `lakebase_read_query` | Execute read-only SQL (routes to replica if available). Wrapped in `READ ONLY` transaction | Yes |
+| `lakebase_execute_query` | Execute read/write SQL (requires `LAKEBASE_ALLOW_WRITE=true`). Blocks `pg_terminate_backend`, `pg_cancel_backend`, `pg_reload_conf` | No |
+| `lakebase_explain_query` | Show PostgreSQL execution plan (`EXPLAIN FORMAT JSON, VERBOSE`). Optional `ANALYZE` + `BUFFERS` for actual timing | Yes |
+
+### Schema Discovery Tools (4)
+
+| Tool | Description |
+|------|-------------|
+| `lakebase_list_schemas` | List user schemas (excludes `pg_catalog`, `information_schema`, `pg_toast`) with owners |
+| `lakebase_list_tables` | List tables/views in a schema with row estimates (`pg_stat_get_live_tuples`) and sizes (`pg_total_relation_size`) |
+| `lakebase_describe_table` | Full table schema: columns, types, nullability, defaults, length/precision, indexes with definitions |
+| `lakebase_object_tree` | Hierarchical JSON tree: schemas -> tables -> columns. Includes TABLE, VIEW, MATERIALIZED VIEW |
+
+### Project Management Tools (3)
+
+| Tool | Description |
+|------|-------------|
+| `lakebase_list_projects` | List all Lakebase projects in the workspace via Databricks API. Optional catalog filter |
+| `lakebase_describe_project` | Detailed project info: configuration, branches, compute sizes, storage usage, sync pipelines |
+| `lakebase_get_connection_string` | Get PostgreSQL connection string with temporary credentials via Databricks credential vending. Supports primary and replica endpoints |
+
+### Branching Tools (3)
+
+| Tool | Description |
+|------|-------------|
+| `lakebase_create_branch` | Create a copy-on-write branch (instant, shared storage). Optional parent branch selection |
+| `lakebase_list_branches` | List all branches with creation time, parent, compute status, CU allocation |
+| `lakebase_delete_branch` | Delete a branch (irreversible). **Cannot delete production/main** — enforced server-side |
+
+### Compute Management Tools (6)
+
+| Tool | Description |
+|------|-------------|
+| `lakebase_get_compute_status` | Current state (`active`/`suspended`/`scaling_up`/`scaling_down`), CU allocation, connections, uptime |
+| `lakebase_configure_autoscaling` | Set min/max CU range. Rules: each CU = 2 GB RAM, max spread = 8 CU, 0.5–32 CU range. No restart needed |
+| `lakebase_configure_scale_to_zero` | Enable/disable auto-suspend with inactivity timeout (60–3600s). Dev: 60s, Staging: 300s, Prod: disabled |
+| `lakebase_get_compute_metrics` | Time-series: CPU%, memory%, working set, connections, state transitions. Lookback: 5–1440 minutes |
+| `lakebase_restart_compute` | Restart compute (interrupts active connections). For config changes, performance issues, or extension updates |
+| `lakebase_create_read_replica` | Create read replica with independent autoscaling. Shares storage (no data duplication) |
+
+### Migration Tools (2)
+
+| Tool | Description |
+|------|-------------|
+| `lakebase_prepare_migration` | Create temporary branch from production, apply DDL. Returns branch name for testing |
+| `lakebase_complete_migration` | `apply=true`: replay DDL on production. `apply=false`: delete branch, discard changes |
+
+### Sync Tools (2)
+
+| Tool | Description |
+|------|-------------|
+| `lakebase_create_sync` | Create Delta <-> Lakebase sync pipeline. Directions: `delta_to_lakebase`, `lakebase_to_delta`. Frequencies: `snapshot`, `triggered`, `continuous` |
+| `lakebase_list_syncs` | List all sync pipelines with source, target, direction, frequency, status, last sync time |
+
+### Data Quality Tools (1)
+
+| Tool | Description |
+|------|-------------|
+| `lakebase_profile_table` | Per-column statistics: null%, cardinality, min/max, mean, stddev (numeric), distinct counts. Configurable sample size (100–1M rows) |
+
+### Feature Store Tools (2)
+
+| Tool | Description |
+|------|-------------|
+| `lakebase_lookup_features` | Low-latency (<10ms) feature point lookup by entity keys. Supports column selection |
+| `lakebase_list_feature_tables` | List all feature-serving tables in a schema with row counts and sizes |
+
+### Insights (1 tool + 1 resource)
+
+| Name | Type | Description |
+|------|------|-------------|
+| `lakebase_append_insight` | Tool | Record observations during analysis. Accumulates in session memo |
+| `memo://insights` | Resource | Read all recorded insights as a bullet list |
+
+---
+
+## Prompt Templates (4)
+
+Reusable prompt templates that guide agents through common multi-step workflows:
+
+| Prompt | Use Case | Tools Used |
+|--------|----------|------------|
+| `lakebase_explore_database` | Step-by-step database exploration | `list_schemas` -> `list_tables` -> `describe_table` -> `read_query` -> `profile_table` -> `append_insight` |
+| `lakebase_safe_migration` | Branch-based schema migration | `prepare_migration` -> `read_query` (test) -> `explain_query` (validate) -> `complete_migration` |
+| `lakebase_setup_sync` | Delta <-> Lakebase synchronization | `create_sync` -> `list_syncs` |
+| `lakebase_autoscaling_tuning` | Monitor and tune compute autoscaling | `get_compute_status` -> `get_compute_metrics` -> `configure_autoscaling` -> `configure_scale_to_zero` -> `create_read_replica` |
+
+**Usage in Claude Code:**
+```
+Use the lakebase_explore_database prompt to guide your exploration of my database.
+```
+
+**Usage in Python MCP client:**
+```python
+prompt = await session.get_prompt("lakebase_autoscaling_tuning")
+print(prompt.messages[0].content.text)
+```
+
+---
+
+## Autoscaling-Aware Design
+
+This server is purpose-built for Lakebase Autoscaling compute:
+
+### Scale-to-Zero Retry
+When compute is suspended, the first connection attempt fails. The server retries with exponential backoff:
+- Attempts: 5 (configurable via `LAKEBASE_S2Z_RETRY_ATTEMPTS`)
+- Delays: 0.5s -> 1.0s -> 2.0s -> 4.0s -> 8.0s (capped at `LAKEBASE_S2Z_MAX_DELAY`)
+- Catches: `OperationalError`, `ConnectionException`, `ConnectionRefusedError`, `OSError`
+
+### Read Replica Routing
+- `lakebase_read_query` calls `execute_readonly()` which prefers the replica pool
+- `lakebase_execute_query` always uses the primary pool
+- Automatic fallback to primary if replica is unavailable
+
+### Connection Health
+- Pre-checkout health checks (`AsyncConnectionPool.check_connection`)
+- Max lifetime: 300s — stale connections recycled
+- Max idle: 60s — idle connections evicted
+- Reconnect timeout: 30s
+
+### Autoscaling-Aware Error Messages
+| Condition | Message |
+|-----------|---------|
+| Scale-to-zero wake-up | "Compute is waking up... Retries exhausted. Try again shortly." |
+| Connection refused | "Cannot connect. Possible: suspended, restarting, autoscaling in progress." |
+| Connection terminated | "Connection terminated during restart/scaling. Pool will reconnect." |
+| Permission denied | "UC permissions don't allow this operation." |
+| Table not found | "Use `lakebase_list_tables` to discover available tables." |
+| Syntax error | "SQL syntax error — {details}." |
+| Query timeout | "Try limiting rows with LIMIT or simplifying query." |
+
+---
+
+## Safety Controls
+
+| Control | Details |
+|---------|---------|
+| **Write guard** | All write/DDL queries blocked unless `LAKEBASE_ALLOW_WRITE=true` |
+| **Read-only transactions** | `lakebase_read_query` wraps in `SET TRANSACTION READ ONLY` |
+| **Dangerous function blocking** | `pg_terminate_backend`, `pg_cancel_backend`, `pg_reload_conf` are rejected at validation |
+| **Production branch protection** | `lakebase_delete_branch` refuses to delete `production` or `main` |
+| **Row limits** | Queries capped at `LAKEBASE_MAX_ROWS` (default: 1000) |
+| **Query timeout** | `connect_timeout` enforced via `LAKEBASE_QUERY_TIMEOUT` (default: 30s) |
+| **Input validation** | Pydantic models enforce bounds on all parameters (CU ranges, timeouts, sample sizes) |
 
 ---
 
@@ -60,24 +198,24 @@ Create a `.env` file or export these environment variables:
 export LAKEBASE_HOST="ep-your-endpoint.database.us-east-1.cloud.databricks.com"
 export LAKEBASE_DATABASE="databricks_postgres"
 
-# Optional — Databricks workspace (for compute management tools)
+# Optional — Databricks workspace (for compute/project/branching tools)
 export DATABRICKS_HOST="https://your-workspace.cloud.databricks.com"
 
 # Optional — Read replica
 export LAKEBASE_REPLICA_HOST=""
 
 # Optional — Safety (defaults shown)
-export LAKEBASE_ALLOW_WRITE="false"      # Set to "true" to enable write queries
-export LAKEBASE_MAX_ROWS="1000"          # Max rows returned per query
-export LAKEBASE_QUERY_TIMEOUT="30"       # Query timeout in seconds
+export LAKEBASE_ALLOW_WRITE="false"
+export LAKEBASE_MAX_ROWS="1000"
+export LAKEBASE_QUERY_TIMEOUT="30"
 
 # Optional — Scale-to-zero retry (defaults shown)
-export LAKEBASE_S2Z_RETRY_ATTEMPTS="5"   # Retries when compute is waking
-export LAKEBASE_S2Z_RETRY_DELAY="0.5"    # Base delay in seconds (doubles each retry)
+export LAKEBASE_S2Z_RETRY_ATTEMPTS="5"
+export LAKEBASE_S2Z_RETRY_DELAY="0.5"
 
 # Optional — Pool lifecycle (defaults shown)
-export LAKEBASE_POOL_MAX_LIFETIME="300"  # Max connection age in seconds
-export LAKEBASE_POOL_MAX_IDLE="60"       # Max idle time before eviction
+export LAKEBASE_POOL_MAX_LIFETIME="300"
+export LAKEBASE_POOL_MAX_IDLE="60"
 ```
 
 ### 3. Run Locally
@@ -151,7 +289,6 @@ databricks apps create lakebase-mcp-server --profile DEFAULT
 2. **Set secrets** for the Lakebase connection
 
 ```bash
-# Set required secrets
 databricks apps set-secret lakebase-mcp-server LAKEBASE_HOST \
   "ep-your-endpoint.database.us-east-1.cloud.databricks.com" --profile DEFAULT
 
@@ -189,147 +326,45 @@ Edit `deploy/register_mcp_catalog.py` to set your actual app URL before running.
 
 ---
 
-## Tool Reference
-
-### Query Tools
-
-| Tool | Description | Read-Only |
-|------|-------------|-----------|
-| `lakebase_read_query` | Execute a read-only SQL query (routed to replica if available) | Yes |
-| `lakebase_execute_query` | Execute a read/write SQL query (requires `LAKEBASE_ALLOW_WRITE=true`) | No |
-| `lakebase_explain_query` | Show the execution plan for a SQL query with optional `ANALYZE` | Yes |
-
-### Schema Tools
-
-| Tool | Description |
-|------|-------------|
-| `lakebase_list_schemas` | List all user-created schemas (excludes pg_catalog, information_schema) |
-| `lakebase_list_tables` | List tables in a schema with row estimates and sizes |
-| `lakebase_describe_table` | Full table schema: columns, types, nullability, indexes, constraints |
-| `lakebase_object_tree` | Hierarchical view: schemas -> tables -> columns |
-
-### Project Tools
-
-| Tool | Description |
-|------|-------------|
-| `lakebase_list_projects` | List all Lakebase projects in the workspace |
-| `lakebase_describe_project` | Project details: branches, compute, quotas |
-| `lakebase_get_connection_string` | Get the PostgreSQL connection string for a branch |
-
-### Branching Tools
-
-| Tool | Description |
-|------|-------------|
-| `lakebase_create_branch` | Create a branch from production (copy-on-write, instant) |
-| `lakebase_list_branches` | List all branches for a project |
-| `lakebase_delete_branch` | Delete a branch (cannot delete production) |
-
-### Compute Tools (Autoscaling)
-
-| Tool | Description |
-|------|-------------|
-| `lakebase_get_compute_status` | Current state (active/suspended/scaling), CU allocation, connections |
-| `lakebase_configure_autoscaling` | Set min/max CU range (max spread: 8 CU). Each CU = 2 GB RAM |
-| `lakebase_configure_scale_to_zero` | Enable/disable auto-suspend with inactivity timeout (60-3600s) |
-| `lakebase_get_compute_metrics` | CPU, memory, working set, connections over time |
-| `lakebase_restart_compute` | Restart compute (interrupts connections) |
-| `lakebase_create_read_replica` | Create a read replica with independent autoscaling |
-
-### Migration Tools
-
-| Tool | Description |
-|------|-------------|
-| `lakebase_prepare_migration` | Create a migration branch and apply DDL for testing |
-| `lakebase_complete_migration` | Apply migration to production (`apply=true`) or discard (`apply=false`) |
-
-### Sync Tools
-
-| Tool | Description |
-|------|-------------|
-| `lakebase_create_sync` | Set up Delta <-> Lakebase sync (snapshot, triggered, or continuous) |
-| `lakebase_list_syncs` | List all active sync pipelines for a project |
-
-### Quality & Feature Store Tools
-
-| Tool | Description |
-|------|-------------|
-| `lakebase_profile_table` | Per-column statistics: null%, cardinality, min/max, type distribution |
-| `lakebase_lookup_features` | Low-latency feature lookup by entity keys |
-| `lakebase_list_feature_tables` | List all feature-serving tables |
-
-### Insights Resource
-
-| Resource | Description |
-|----------|-------------|
-| `memo://insights` | Session-scoped notepad. Use `lakebase_append_insight` to record observations |
-
----
-
-## Prompt Templates
-
-The server includes 4 reusable prompt templates that guide agents through common workflows:
-
-| Prompt | Use Case |
-|--------|----------|
-| `lakebase_explore_database` | Step-by-step database exploration (schemas -> tables -> profiling) |
-| `lakebase_safe_migration` | Branch-based migration workflow (prepare -> test -> apply/discard) |
-| `lakebase_setup_sync` | Set up Delta <-> Lakebase synchronization |
-| `lakebase_autoscaling_tuning` | Monitor metrics and tune autoscaling/scale-to-zero settings |
-
-**Usage in Claude Code:**
-
-```
-Use the lakebase_explore_database prompt to guide your exploration of my database.
-```
-
-**Usage in Python MCP client:**
-
-```python
-prompt = await session.get_prompt("lakebase_autoscaling_tuning")
-print(prompt.messages[0].content.text)
-```
-
----
-
 ## Architecture
 
 ```
 lakebase-mcp/
 ├── server/
 │   ├── main.py              # FastMCP server, lifespan, tool registration
-│   ├── config.py             # Environment-based configuration
-│   ├── db.py                 # Async connection pool (S2Z retry + replica routing)
-│   ├── auth.py               # Databricks SDK authentication
+│   ├── config.py            # Environment-based configuration (16 vars)
+│   ├── db.py                # Async connection pool (S2Z retry + replica routing)
+│   ├── auth.py              # Databricks SDK auth (OBO + standard) + UC permissions
 │   ├── tools/
-│   │   ├── query.py          # 3 tools: read, execute, explain
-│   │   ├── schema.py         # 4 tools: schemas, tables, describe, tree
-│   │   ├── instance.py       # 3 tools: projects, describe, connection string
-│   │   ├── branching.py      # 3 tools: create, list, delete branches
-│   │   ├── compute.py        # 6 tools: autoscaling, S2Z, metrics, replicas
-│   │   ├── migration.py      # 2 tools: prepare, complete
-│   │   ├── sync.py           # 2 tools: create sync, list syncs
-│   │   ├── quality.py        # 1 tool: profile table
-│   │   └── feature_store.py  # 2 tools: lookup, list feature tables
+│   │   ├── query.py         # 3 tools: read, execute, explain
+│   │   ├── schema.py        # 4 tools: schemas, tables, describe, tree
+│   │   ├── instance.py      # 3 tools: projects, describe, connection string
+│   │   ├── branching.py     # 3 tools: create, list, delete branches
+│   │   ├── compute.py       # 6 tools: autoscaling, S2Z, metrics, replicas
+│   │   ├── migration.py     # 2 tools: prepare, complete
+│   │   ├── sync.py          # 2 tools: create sync, list syncs
+│   │   ├── quality.py       # 1 tool: profile table
+│   │   └── feature_store.py # 2 tools: lookup, list feature tables
 │   ├── resources/
-│   │   └── insights.py       # memo://insights resource + append tool
+│   │   └── insights.py      # memo://insights resource + append tool
 │   ├── prompts/
-│   │   └── templates.py      # 4 prompt templates
+│   │   └── templates.py     # 4 prompt templates
 │   └── utils/
-│       ├── errors.py         # Autoscaling-aware error handling
-│       ├── formatting.py     # Markdown/JSON response formatting
-│       └── pagination.py     # Cursor-based pagination
+│       ├── errors.py        # Autoscaling-aware error handling
+│       ├── formatting.py    # Markdown/JSON response formatting
+│       └── pagination.py    # Cursor-based pagination
 ├── tests/
-│   ├── test_unit/            # 39 unit tests (all passing)
-│   ├── test_integration/     # Live connection tests
-│   └── test_e2e/             # Full MCP protocol tests
+│   ├── test_unit/           # 39+ unit tests (no connection needed)
+│   ├── test_integration/    # Live connection tests
+│   └── test_e2e/            # Full MCP protocol tests
 ├── deploy/
-│   ├── deploy.sh             # Databricks Apps deployment script
 │   └── register_mcp_catalog.py  # Unity Catalog registration
 ├── eval/
-│   └── evaluation.xml        # 10 evaluation Q&A pairs
-├── app.yaml                  # Databricks App configuration
-├── pyproject.toml            # Project metadata and dependencies
-└── requirements.txt          # Pip-compatible requirements
+│   └── evaluation.xml       # 10 evaluation Q&A pairs
+├── app.yaml                 # Databricks App configuration
+├── pyproject.toml           # Project metadata (v0.2.0)
+├── requirements.txt         # Pip-compatible requirements
+└── TESTING_SCENARIOS.md     # Comprehensive test scenarios for all 27+ capabilities
 ```
 
 ---
@@ -347,6 +382,31 @@ LAKEBASE_LIVE_TEST=true uv run pytest tests/test_integration/ -v
 LAKEBASE_E2E_TEST=true MCP_SERVER_URL=http://localhost:8000/mcp \
   uv run pytest tests/test_e2e/ -v
 ```
+
+---
+
+## Configuration Reference
+
+| Environment Variable | Default | Description |
+|---------------------|---------|-------------|
+| `LAKEBASE_HOST` | *(required)* | Lakebase endpoint hostname |
+| `LAKEBASE_DATABASE` | *(required)* | Database name |
+| `LAKEBASE_PORT` | `5432` | PostgreSQL port |
+| `DATABRICKS_HOST` | *(optional)* | Workspace URL (for compute/project/branching tools) |
+| `LAKEBASE_REPLICA_HOST` | *(empty)* | Read replica hostname |
+| `LAKEBASE_REPLICA_PORT` | `5432` | Read replica port |
+| `LAKEBASE_PG_USER` | *(from .pgpass)* | Explicit PostgreSQL username |
+| `LAKEBASE_PG_PASSWORD` | *(from .pgpass)* | Explicit PostgreSQL password |
+| `LAKEBASE_ALLOW_WRITE` | `false` | Allow write/DDL queries |
+| `LAKEBASE_MAX_ROWS` | `1000` | Max rows per query result |
+| `LAKEBASE_QUERY_TIMEOUT` | `30` | Query timeout / connect timeout (seconds) |
+| `LAKEBASE_S2Z_RETRY_ATTEMPTS` | `5` | Scale-to-zero connection retries |
+| `LAKEBASE_S2Z_RETRY_DELAY` | `0.5` | Base retry delay (seconds, doubles each attempt) |
+| `LAKEBASE_S2Z_MAX_DELAY` | `10.0` | Max retry delay cap (seconds) |
+| `LAKEBASE_POOL_MIN` | `2` | Minimum pool connections |
+| `LAKEBASE_POOL_MAX` | `10` | Maximum pool connections |
+| `LAKEBASE_POOL_MAX_LIFETIME` | `300` | Max connection age (seconds) |
+| `LAKEBASE_POOL_MAX_IDLE` | `60` | Max idle time before eviction (seconds) |
 
 ---
 
@@ -384,28 +444,32 @@ LAKEBASE_E2E_TEST=true MCP_SERVER_URL=http://localhost:8000/mcp \
 >
 > Continuous sync pipeline created. The `analytics.ml.customer_features` Delta table will stream changes to Lakebase. Use `lakebase_lookup_features` for sub-millisecond lookups.
 
+### Profile Data Quality
+
+> **You**: Check the data quality of the orders table.
+>
+> **Agent**: *Calls `lakebase_profile_table` with table_name="public.orders"*
+>
+> | Column | Type | Nulls% | Distinct | Min | Max | Avg |
+> |--------|------|--------|----------|-----|-----|-----|
+> | order_id | integer | 0% | 50000 | 1 | 50000 | 25000.5 |
+> | amount | numeric | 2.3% | 4521 | 0.99 | 9999.99 | 142.87 |
+> | status | text | 0% | 5 | | | |
+
 ---
 
-## Configuration Reference
+## Authentication
 
-| Environment Variable | Default | Description |
-|---------------------|---------|-------------|
-| `LAKEBASE_HOST` | *(required)* | Lakebase endpoint hostname |
-| `LAKEBASE_DATABASE` | *(required)* | Database name |
-| `LAKEBASE_PORT` | `5432` | PostgreSQL port |
-| `DATABRICKS_HOST` | *(optional)* | Workspace URL (for compute tools) |
-| `LAKEBASE_REPLICA_HOST` | *(empty)* | Read replica hostname |
-| `LAKEBASE_REPLICA_PORT` | `5432` | Read replica port |
-| `LAKEBASE_ALLOW_WRITE` | `false` | Allow write/DDL queries |
-| `LAKEBASE_MAX_ROWS` | `1000` | Max rows per query result |
-| `LAKEBASE_QUERY_TIMEOUT` | `30` | Query timeout (seconds) |
-| `LAKEBASE_S2Z_RETRY_ATTEMPTS` | `5` | Scale-to-zero connection retries |
-| `LAKEBASE_S2Z_RETRY_DELAY` | `0.5` | Base retry delay (seconds, doubles each attempt) |
-| `LAKEBASE_S2Z_MAX_DELAY` | `10.0` | Max retry delay cap (seconds) |
-| `LAKEBASE_POOL_MIN` | `2` | Minimum pool connections |
-| `LAKEBASE_POOL_MAX` | `10` | Maximum pool connections |
-| `LAKEBASE_POOL_MAX_LIFETIME` | `300` | Max connection age (seconds) |
-| `LAKEBASE_POOL_MAX_IDLE` | `60` | Max idle time before eviction (seconds) |
+The server supports multiple authentication modes:
+
+| Mode | When | How |
+|------|------|-----|
+| **On-Behalf-Of (OBO)** | Deployed as Databricks App | `ModelServingUserCredentials()` — inherits user identity |
+| **Standard SDK** | Local development, CLI | `WorkspaceClient()` — uses `~/.databrickscfg` or env vars |
+| **`.pgpass` file** | Local dev with OAuth rotation | Standard PostgreSQL `.pgpass` for connection credentials |
+| **Explicit credentials** | CI/CD, service accounts | `LAKEBASE_PG_USER` + `LAKEBASE_PG_PASSWORD` env vars |
+
+Unity Catalog permissions are enforced at the database layer — the server does not bypass access controls.
 
 ---
 
