@@ -1,0 +1,73 @@
+# Lakebase MCP Governance Configuration
+# ======================================
+#
+# Fine-grained access control for SQL statements and MCP tools.
+# All settings can be overridden by env vars (env vars take precedence).
+#
+# Usage:
+#   export LAKEBASE_GOVERNANCE_CONFIG=/path/to/governance.yaml
+#
+# Requires: pip install pyyaml (optional dependency)
+
+sql:
+  # Pre-built profile: read_only | analyst | developer | admin
+  #   read_only:  select, show, describe, explain
+  #   analyst:    read_only + insert, set
+  #   developer:  analyst + update, delete, create, alter, call
+  #   admin:      all 17 statement types
+  profile: "read_only"
+
+  # Fine-grained overrides (applied after profile)
+  # All 17 types: select, insert, update, delete, create, drop, alter,
+  #               merge, truncate, grant, revoke, use, show, describe,
+  #               explain, set, call
+  # allowed_types:
+  #   - select
+  #   - insert
+
+  # Deny specific types (applied after allowed_types)
+  # denied_types:
+  #   - drop
+  #   - truncate
+  #   - grant
+  #   - revoke
+
+tools:
+  # Pre-built profile: read_only | analyst | developer | admin
+  #   read_only:  sql_query, schema_read, project_read, branch_read,
+  #               compute_read, sync_read, quality, feature_read, insight
+  #   analyst:    same as read_only
+  #   developer:  read_only + branch_write, compute_write, migration, sync_write
+  #   admin:      all categories
+  profile: "read_only"
+
+  # Category-level overrides
+  # Categories: sql_query, schema_read, project_read, branch_read,
+  #             branch_write, compute_read, compute_write, migration,
+  #             sync_read, sync_write, quality, feature_read, insight
+  # allowed_categories:
+  #   - sql_query
+  #   - schema_read
+
+  # denied_categories:
+  #   - compute_write
+  #   - migration
+
+  # Individual tool overrides (highest priority)
+  # All 27 tools:
+  #   sql_query:     lakebase_execute_query, lakebase_read_query, lakebase_explain_query
+  #   schema_read:   lakebase_list_schemas, lakebase_list_tables, lakebase_describe_table, lakebase_object_tree
+  #   project_read:  lakebase_list_projects, lakebase_describe_project, lakebase_get_connection_string
+  #   branch_read:   lakebase_list_branches
+  #   branch_write:  lakebase_create_branch, lakebase_delete_branch
+  #   compute_read:  lakebase_get_compute_status, lakebase_get_compute_metrics
+  #   compute_write: lakebase_configure_autoscaling, lakebase_configure_scale_to_zero, lakebase_restart_compute, lakebase_create_read_replica
+  #   migration:     lakebase_prepare_migration, lakebase_complete_migration
+  #   sync_read:     lakebase_list_syncs
+  #   sync_write:    lakebase_create_sync
+  #   quality:       lakebase_profile_table
+  #   feature_read:  lakebase_lookup_features, lakebase_list_feature_tables
+  #   insight:       lakebase_append_insight
+  # allowed_tools: []
+  denied_tools:
+    - lakebase_execute_query    # Force agents to use read_query only

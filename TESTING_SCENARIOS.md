@@ -838,3 +838,251 @@ Tests: Full MCP protocol compliance, tool invocation through the HTTP transport.
 | Unit Tests | `pytest tests/test_unit/` | | | |
 | Integration Tests | `pytest tests/test_integration/` | | | |
 | E2E Tests | `pytest tests/test_e2e/` | | | |
+| Governance — SQL | 16.1–16.5 | | | |
+| Governance — Tools | 17.1–17.4 | | | |
+| Governance — Profiles | 18.1–18.4 | | | |
+| Governance — Backward Compat | 19.1–19.2 | | | |
+
+---
+
+## Scenario 16: SQL Statement Governance (sqlglot-based)
+
+### 16.1 — Read-Only SQL Profile
+
+**Setup**: `export LAKEBASE_SQL_PROFILE=read_only`
+
+**Steps**:
+1. Call `lakebase_execute_query` with `sql: "SELECT 1"`
+2. Call `lakebase_execute_query` with `sql: "INSERT INTO t VALUES (1)"`
+3. Call `lakebase_execute_query` with `sql: "DROP TABLE t"`
+4. Call `lakebase_execute_query` with `sql: "SHOW TABLES"`
+5. Call `lakebase_execute_query` with `sql: "EXPLAIN SELECT 1"`
+
+**Expected**:
+- Step 1: Succeeds (SELECT allowed)
+- Step 2: Error: "Statement type 'insert' is not allowed. Permitted types: describe, explain, select, show"
+- Step 3: Error: "Statement type 'drop' is not allowed..."
+- Step 4: Succeeds (SHOW allowed)
+- Step 5: Succeeds (EXPLAIN allowed)
+
+### 16.2 — CTE Detection (Critical Edge Case)
+
+**Purpose**: Verify sqlglot correctly classifies CTEs — the case where regex fails.
+
+**Setup**: `export LAKEBASE_SQL_PROFILE=read_only`
+
+**Steps**:
+1. Call `lakebase_execute_query` with `sql: "WITH data AS (SELECT 1 AS id) SELECT * FROM data"`
+2. Call `lakebase_execute_query` with `sql: "WITH data AS (SELECT 1 AS id) INSERT INTO t SELECT * FROM data"`
+
+**Expected**:
+- Step 1: Succeeds (CTE wrapping SELECT → classified as SELECT)
+- Step 2: Error: "Statement type 'insert' is not allowed" (CTE wrapping INSERT → classified as INSERT)
+
+### 16.3 — Multi-Statement SQL
+
+**Setup**: `export LAKEBASE_SQL_PROFILE=analyst` (allows SELECT + INSERT)
+
+**Steps**:
+1. Call `lakebase_execute_query` with `sql: "SELECT 1; INSERT INTO t VALUES (1)"`
+2. Call `lakebase_execute_query` with `sql: "SELECT 1; DROP TABLE t"`
+
+**Expected**:
+- Step 1: Both statements allowed (SELECT + INSERT in analyst profile)
+- Step 2: Error: "Statement type 'drop' is not allowed" (DROP not in analyst profile)
+
+### 16.4 — Developer SQL Profile
+
+**Setup**: `export LAKEBASE_SQL_PROFILE=developer`
+
+**Steps**:
+1. Call `lakebase_execute_query` with `sql: "CREATE TABLE test_gov (id int)"`
+2. Call `lakebase_execute_query` with `sql: "ALTER TABLE test_gov ADD COLUMN name text"`
+3. Call `lakebase_execute_query` with `sql: "INSERT INTO test_gov VALUES (1, 'test')"`
+4. Call `lakebase_execute_query` with `sql: "DROP TABLE test_gov"` — should FAIL
+5. Call `lakebase_execute_query` with `sql: "GRANT ALL ON test_gov TO someone"` — should FAIL
+
+**Expected**:
+- Steps 1–3: Succeed (CREATE, ALTER, INSERT in developer profile)
+- Step 4: Error (DROP not in developer profile)
+- Step 5: Error (GRANT not in developer profile)
+
+### 16.5 — SQL Denied Types Override
+
+**Setup**:
+```bash
+export LAKEBASE_SQL_PROFILE=developer
+export LAKEBASE_SQL_DENIED_TYPES=create,alter
+```
+
+**Steps**:
+1. Call `lakebase_execute_query` with `sql: "SELECT 1"` — should work
+2. Call `lakebase_execute_query` with `sql: "CREATE TABLE t (id int)"` — should FAIL
+3. Call `lakebase_execute_query` with `sql: "INSERT INTO t VALUES (1)"` — should work
+
+**Expected**:
+- Step 1: Succeeds (SELECT still in developer profile)
+- Step 2: Error (CREATE explicitly denied)
+- Step 3: Succeeds (INSERT still in developer profile, not denied)
+
+---
+
+## Scenario 17: Tool Access Control
+
+### 17.1 — Read-Only Tool Profile
+
+**Setup**: `export LAKEBASE_TOOL_PROFILE=read_only`
+
+**Steps**:
+1. Call `lakebase_read_query` — should work (sql_query category allowed)
+2. Call `lakebase_list_schemas` — should work (schema_read allowed)
+3. Call `lakebase_create_branch` — should FAIL (branch_write not in read_only)
+4. Call `lakebase_restart_compute` — should FAIL (compute_write not in read_only)
+5. Call `lakebase_prepare_migration` — should FAIL (migration not in read_only)
+
+**Expected**:
+- Steps 1–2: Succeed
+- Steps 3–5: Error: "Tool 'tool_name' is not permitted by the current governance policy."
+
+### 17.2 — Individual Tool Deny List
+
+**Setup**:
+```bash
+export LAKEBASE_TOOL_PROFILE=admin
+export LAKEBASE_TOOL_DENIED=lakebase_execute_query,lakebase_delete_branch
+```
+
+**Steps**:
+1. Call `lakebase_read_query` — should work
+2. Call `lakebase_execute_query` — should FAIL (individually denied)
+3. Call `lakebase_create_branch` — should work
+4. Call `lakebase_delete_branch` — should FAIL (individually denied)
+
+**Expected**:
+- Admin profile allows all, but individual deny overrides
+
+### 17.3 — Category Deny Override
+
+**Setup**:
+```bash
+export LAKEBASE_TOOL_PROFILE=developer
+export LAKEBASE_TOOL_DENIED_CATEGORIES=compute_write,migration
+```
+
+**Steps**:
+1. Call `lakebase_get_compute_status` — should work (compute_read, not compute_write)
+2. Call `lakebase_configure_autoscaling` — should FAIL (compute_write denied)
+3. Call `lakebase_prepare_migration` — should FAIL (migration denied)
+4. Call `lakebase_create_branch` — should work (branch_write still in developer)
+
+### 17.4 — Dual-Layer Enforcement
+
+**Setup**:
+```bash
+export LAKEBASE_SQL_PROFILE=read_only
+export LAKEBASE_TOOL_PROFILE=admin
+```
+
+**Steps**:
+1. Call `lakebase_execute_query` with `sql: "SELECT 1"` — should work (tool allowed + SQL allowed)
+2. Call `lakebase_execute_query` with `sql: "INSERT INTO t VALUES (1)"` — should FAIL (tool allowed but SQL denied)
+3. Call `lakebase_create_branch` — should work (tool allowed, no SQL governance)
+
+**Expected**: Both governance layers enforce independently.
+
+---
+
+## Scenario 18: Governance Profiles End-to-End
+
+### 18.1 — Analyst Profile (Full Stack)
+
+**Setup**:
+```bash
+export LAKEBASE_SQL_PROFILE=analyst
+export LAKEBASE_TOOL_PROFILE=analyst
+```
+
+**Steps**:
+1. `lakebase_list_schemas` — works
+2. `lakebase_list_tables` — works
+3. `lakebase_read_query` with SELECT — works
+4. `lakebase_execute_query` with INSERT — works (analyst allows INSERT)
+5. `lakebase_execute_query` with DROP — fails
+6. `lakebase_profile_table` — works (quality in analyst tools)
+7. `lakebase_create_branch` — fails (branch_write not in analyst)
+
+### 18.2 — Developer Profile (Full Stack)
+
+**Setup**:
+```bash
+export LAKEBASE_SQL_PROFILE=developer
+export LAKEBASE_TOOL_PROFILE=developer
+```
+
+**Steps**:
+1. `lakebase_execute_query` with CREATE TABLE — works
+2. `lakebase_execute_query` with INSERT — works
+3. `lakebase_execute_query` with UPDATE — works
+4. `lakebase_execute_query` with DELETE — works
+5. `lakebase_execute_query` with DROP — fails (not in developer SQL)
+6. `lakebase_create_branch` — works (branch_write in developer)
+7. `lakebase_prepare_migration` — works (migration in developer)
+
+### 18.3 — Admin Profile (Full Stack)
+
+**Setup**:
+```bash
+export LAKEBASE_SQL_PROFILE=admin
+export LAKEBASE_TOOL_PROFILE=admin
+```
+
+**Steps**:
+1. `lakebase_execute_query` with any statement type — all work
+2. All 27 tools accessible — no restrictions
+
+### 18.4 — Customer Demo: Read-Only Agent (DB-I-15833)
+
+**Setup**:
+```bash
+export LAKEBASE_SQL_PROFILE=read_only
+export LAKEBASE_TOOL_PROFILE=read_only
+export LAKEBASE_TOOL_DENIED=lakebase_execute_query
+```
+
+**Steps**:
+1. `lakebase_read_query` with SELECT — works
+2. `lakebase_execute_query` — fails (individually denied)
+3. `lakebase_list_schemas` — works
+4. `lakebase_describe_table` — works
+5. `lakebase_profile_table` — works
+6. `lakebase_create_branch` — fails
+7. `lakebase_configure_autoscaling` — fails
+
+**Expected**: Agent is fully restricted to read-only exploration. Cannot modify anything.
+
+---
+
+## Scenario 19: Backward Compatibility
+
+### 19.1 — Legacy Mode (ALLOW_WRITE=false)
+
+**Setup**: Only `LAKEBASE_ALLOW_WRITE=false` — NO governance env vars.
+
+**Steps**:
+1. `lakebase_execute_query` with `sql: "SELECT 1"` — works
+2. `lakebase_execute_query` with `sql: "INSERT INTO t VALUES (1)"` — fails (write blocked)
+3. `lakebase_read_query` with SELECT — works
+4. All non-SQL tools — work (no tool restrictions in legacy mode)
+
+**Expected**: Identical behavior to pre-governance version.
+
+### 19.2 — Legacy Mode (ALLOW_WRITE=true)
+
+**Setup**: Only `LAKEBASE_ALLOW_WRITE=true` — NO governance env vars.
+
+**Steps**:
+1. `lakebase_execute_query` with `sql: "INSERT INTO t VALUES (1)"` — works
+2. `lakebase_execute_query` with `sql: "DROP TABLE t"` — works
+3. All tools — work
+
+**Expected**: Identical behavior to pre-governance version with writes enabled.

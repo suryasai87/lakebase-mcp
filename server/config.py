@@ -41,6 +41,17 @@ class LakebaseConfig:
         default_factory=lambda: int(os.environ.get("LAKEBASE_QUERY_TIMEOUT", "30"))
     )
 
+    # Governance (fine-grained access control — see server/governance/policy.py)
+    governance_config_path: str = field(
+        default_factory=lambda: os.environ.get("LAKEBASE_GOVERNANCE_CONFIG", "")
+    )
+    sql_profile: str = field(
+        default_factory=lambda: os.environ.get("LAKEBASE_SQL_PROFILE", "")
+    )
+    tool_profile: str = field(
+        default_factory=lambda: os.environ.get("LAKEBASE_TOOL_PROFILE", "")
+    )
+
     # Pool settings
     pool_min_size: int = field(
         default_factory=lambda: int(os.environ.get("LAKEBASE_POOL_MIN", "2"))

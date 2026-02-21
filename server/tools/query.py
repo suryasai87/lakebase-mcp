@@ -1,5 +1,7 @@
-"""SQL query execution tools with safety controls."""
-import re
+"""SQL query execution tools with safety controls.
+
+Uses sqlglot-based SQL governance for fine-grained statement-type permissions.
+"""
 import json
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Optional
@@ -8,12 +10,8 @@ from server.db import pool
 from server.config import config
 from server.utils.errors import handle_error
 from server.utils.formatting import ResponseFormat, format_query_results
-
-# SQL statement classifier
-WRITE_PATTERNS = re.compile(
-    r"^\s*(INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|TRUNCATE|GRANT|REVOKE|COPY)\b",
-    re.IGNORECASE,
-)
+from server.governance.policy import GovernancePolicy
+from server.governance.sql_guard import SQLStatementType
 
 
 class ExecuteQueryInput(BaseModel):
@@ -50,7 +48,7 @@ class ExplainQueryInput(BaseModel):
     )
 
 
-def register_query_tools(mcp: FastMCP):
+def register_query_tools(mcp: FastMCP, governance: GovernancePolicy):
 
     @mcp.tool(
         name="lakebase_execute_query",
@@ -66,20 +64,20 @@ def register_query_tools(mcp: FastMCP):
         """Execute a SQL query against the connected Lakebase PostgreSQL database.
 
         Supports SELECT, INSERT, UPDATE, DELETE and DDL statements.
-        Write operations require LAKEBASE_ALLOW_WRITE=true.
+        Statement types are governed by the SQL governance policy
+        (LAKEBASE_SQL_PROFILE or LAKEBASE_ALLOW_WRITE).
         All queries are subject to Unity Catalog permission enforcement.
 
         Returns results in markdown table or JSON format.
         """
         try:
-            is_write = bool(WRITE_PATTERNS.match(params.sql))
-            if is_write and not config.allow_write:
-                return (
-                    "Error: Write operations are disabled. "
-                    "Set LAKEBASE_ALLOW_WRITE=true to enable INSERT, UPDATE, DELETE, DDL. "
-                    "Use lakebase_read_query for read-only operations."
-                )
-            if is_write:
+            # SQL governance check (replaces old WRITE_PATTERNS regex)
+            allowed, error_msg = governance.check_sql(params.sql)
+            if not allowed:
+                return f"Error: {error_msg}"
+
+            # Route to read-only or read-write pool based on SQL classification
+            if governance.sql_governor.is_write(params.sql):
                 rows = await pool.execute_query(params.sql, max_rows=params.max_rows)
             else:
                 rows = await pool.execute_readonly(params.sql, max_rows=params.max_rows)
@@ -100,13 +98,26 @@ def register_query_tools(mcp: FastMCP):
     async def lakebase_read_query(params: ExecuteQueryInput) -> str:
         """Execute a read-only SQL query against Lakebase.
 
-        Only SELECT statements are allowed. The query runs inside a
-        READ ONLY transaction for safety. Routes to read replica if available.
+        Only SELECT and EXPLAIN statements are allowed regardless of governance
+        policy. The query runs inside a READ ONLY transaction for safety.
+        Routes to read replica if available.
         Ideal for data exploration, analytics, and reporting.
         """
         try:
-            if WRITE_PATTERNS.match(params.sql):
-                return "Error: Only SELECT queries are allowed with read_query. Use lakebase_execute_query for writes."
+            # read_query always enforces SELECT/EXPLAIN-only regardless of governance
+            read_allowed = {
+                SQLStatementType.SELECT,
+                SQLStatementType.EXPLAIN,
+                SQLStatementType.SHOW,
+                SQLStatementType.DESCRIBE,
+            }
+            types = governance.sql_governor.classify(params.sql)
+            if not types or any(t not in read_allowed for t in types):
+                return (
+                    "Error: Only SELECT, EXPLAIN, SHOW, and DESCRIBE queries "
+                    "are allowed with read_query. "
+                    "Use lakebase_execute_query for writes."
+                )
             rows = await pool.execute_readonly(params.sql, max_rows=params.max_rows)
             return format_query_results(rows, fmt=params.response_format)
         except Exception as e:

@@ -25,7 +25,7 @@ This server gives AI agents (Claude, GPT, Copilot, etc.) full control over Lakeb
 | Tool | Description | Read-Only |
 |------|-------------|-----------|
 | `lakebase_read_query` | Execute read-only SQL (routes to replica if available). Wrapped in `READ ONLY` transaction | Yes |
-| `lakebase_execute_query` | Execute read/write SQL (requires `LAKEBASE_ALLOW_WRITE=true`). Blocks `pg_terminate_backend`, `pg_cancel_backend`, `pg_reload_conf` | No |
+| `lakebase_execute_query` | Execute read/write SQL. Governed by SQL profile (`LAKEBASE_SQL_PROFILE` or `LAKEBASE_ALLOW_WRITE`). Blocks `pg_terminate_backend`, `pg_cancel_backend`, `pg_reload_conf` | No |
 | `lakebase_explain_query` | Show PostgreSQL execution plan (`EXPLAIN FORMAT JSON, VERBOSE`). Optional `ANALYZE` + `BUFFERS` for actual timing | Yes |
 
 ### Schema Discovery Tools (4)
@@ -162,13 +162,106 @@ When compute is suspended, the first connection attempt fails. The server retrie
 
 | Control | Details |
 |---------|---------|
-| **Write guard** | All write/DDL queries blocked unless `LAKEBASE_ALLOW_WRITE=true` |
+| **Write guard** | All write/DDL queries blocked unless `LAKEBASE_ALLOW_WRITE=true` (legacy) or governed by `LAKEBASE_SQL_PROFILE` |
+| **SQL governance** | sqlglot-based AST parsing classifies all 17 SQL statement types with per-type allow/deny |
+| **Tool access control** | Per-tool allow/deny lists with pre-built profiles (read_only, analyst, developer, admin) |
 | **Read-only transactions** | `lakebase_read_query` wraps in `SET TRANSACTION READ ONLY` |
 | **Dangerous function blocking** | `pg_terminate_backend`, `pg_cancel_backend`, `pg_reload_conf` are rejected at validation |
 | **Production branch protection** | `lakebase_delete_branch` refuses to delete `production` or `main` |
 | **Row limits** | Queries capped at `LAKEBASE_MAX_ROWS` (default: 1000) |
 | **Query timeout** | `connect_timeout` enforced via `LAKEBASE_QUERY_TIMEOUT` (default: 30s) |
 | **Input validation** | Pydantic models enforce bounds on all parameters (CU ranges, timeouts, sample sizes) |
+
+---
+
+## Fine-Grained Governance
+
+The server provides **dual-layer governance** for controlling what AI agents can do — matching and exceeding Snowflake MCP's access control capabilities.
+
+### Architecture
+
+```
+Request: lakebase_execute_query("DROP TABLE users")
+
+Layer 1 — Tool Access Control
+  Is "lakebase_execute_query" permitted? → check tool profile/allow/deny
+
+Layer 2 — SQL Statement Governance
+  Parse "DROP TABLE users" via sqlglot → SQLStatementType.DROP
+  Is DROP in allowed types? → check SQL profile/allow/deny
+
+Both layers must PASS for execution to proceed.
+```
+
+### SQL Statement Profiles
+
+The server classifies SQL using **sqlglot AST parsing** (not regex) to accurately handle CTEs, subqueries, multi-statement SQL, and Postgres-specific syntax.
+
+| Profile | Allowed Statement Types |
+|---------|------------------------|
+| `read_only` | SELECT, SHOW, DESCRIBE, EXPLAIN |
+| `analyst` | read_only + INSERT, SET |
+| `developer` | analyst + UPDATE, DELETE, CREATE, ALTER, CALL |
+| `admin` | All 17 types (SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, MERGE, TRUNCATE, GRANT, REVOKE, USE, SHOW, DESCRIBE, EXPLAIN, SET, CALL) |
+
+### Tool Access Profiles
+
+| Profile | Allowed Tool Categories |
+|---------|------------------------|
+| `read_only` | sql_query, schema_read, project_read, branch_read, compute_read, sync_read, quality, feature_read, insight |
+| `analyst` | Same as read_only |
+| `developer` | read_only + branch_write, compute_write, migration, sync_write |
+| `admin` | All 13 categories |
+
+### Quick Start Examples
+
+**Read-only agent** (most restrictive — ideal for coding assistants):
+```bash
+export LAKEBASE_SQL_PROFILE=read_only
+export LAKEBASE_TOOL_PROFILE=read_only
+export LAKEBASE_TOOL_DENIED=lakebase_execute_query  # force read_query only
+```
+
+**Analyst agent** (SELECT + INSERT for staging):
+```bash
+export LAKEBASE_SQL_PROFILE=analyst
+export LAKEBASE_TOOL_PROFILE=analyst
+```
+
+**Developer agent** (full CRUD, no admin):
+```bash
+export LAKEBASE_SQL_PROFILE=developer
+export LAKEBASE_TOOL_PROFILE=developer
+```
+
+**Legacy mode** (backward compatible — no governance env vars):
+```bash
+export LAKEBASE_ALLOW_WRITE=false  # same behavior as before
+```
+
+### YAML Configuration (Optional)
+
+For complex policies, use a YAML file instead of env vars:
+
+```bash
+export LAKEBASE_GOVERNANCE_CONFIG=/path/to/governance.yaml
+```
+
+See [`governance.yaml.example`](governance.yaml.example) for the full reference.
+
+### Governance Environment Variables
+
+| Variable | Values | Default | Description |
+|----------|--------|---------|-------------|
+| `LAKEBASE_SQL_PROFILE` | `read_only`, `analyst`, `developer`, `admin` | *(empty = legacy)* | SQL permission profile |
+| `LAKEBASE_TOOL_PROFILE` | `read_only`, `analyst`, `developer`, `admin` | *(empty = legacy)* | Tool access profile |
+| `LAKEBASE_SQL_ALLOWED_TYPES` | comma-separated types | *(empty)* | Additional allowed SQL types |
+| `LAKEBASE_SQL_DENIED_TYPES` | comma-separated types | *(empty)* | Denied SQL types (overrides profile) |
+| `LAKEBASE_TOOL_ALLOWED_CATEGORIES` | comma-separated categories | *(empty)* | Additional allowed tool categories |
+| `LAKEBASE_TOOL_DENIED_CATEGORIES` | comma-separated categories | *(empty)* | Denied tool categories |
+| `LAKEBASE_TOOL_ALLOWED` | comma-separated tool names | *(empty)* | Individual tool allow list |
+| `LAKEBASE_TOOL_DENIED` | comma-separated tool names | *(empty)* | Individual tool deny list |
+| `LAKEBASE_GOVERNANCE_CONFIG` | file path | *(empty)* | Path to governance.yaml |
 
 ---
 
@@ -331,10 +424,14 @@ Edit `deploy/register_mcp_catalog.py` to set your actual app URL before running.
 ```
 lakebase-mcp/
 ├── server/
-│   ├── main.py              # FastMCP server, lifespan, tool registration
-│   ├── config.py            # Environment-based configuration (16 vars)
+│   ├── main.py              # FastMCP server, lifespan, tool registration, governance wiring
+│   ├── config.py            # Environment-based configuration (19 vars)
 │   ├── db.py                # Async connection pool (S2Z retry + replica routing)
 │   ├── auth.py              # Databricks SDK auth (OBO + standard) + UC permissions
+│   ├── governance/
+│   │   ├── sql_guard.py     # sqlglot-based SQL statement classification (17 types)
+│   │   ├── tool_guard.py    # Per-tool access control (13 categories, 4 profiles)
+│   │   └── policy.py        # Unified policy engine (env vars + YAML)
 │   ├── tools/
 │   │   ├── query.py         # 3 tools: read, execute, explain
 │   │   ├── schema.py        # 4 tools: schemas, tables, describe, tree
@@ -363,7 +460,7 @@ lakebase-mcp/
 │   └── evaluation.xml       # 10 evaluation Q&A pairs
 ├── app.yaml                 # Databricks App configuration
 ├── pyproject.toml           # Project metadata (v0.2.0)
-├── requirements.txt         # Pip-compatible requirements
+├── requirements.txt         # Pip-compatible requirements (includes sqlglot for SQL governance)
 └── TESTING_SCENARIOS.md     # Comprehensive test scenarios for all 27+ capabilities
 ```
 

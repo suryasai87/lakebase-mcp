@@ -1,7 +1,7 @@
 """Lakebase MCP Server — main entry point.
 
 Merged: base server + autoscaling compute tools + replica pool initialization.
-27 tools, 4 prompts, 1 resource.
+27 tools, 4 prompts, 1 resource, dual-layer governance.
 """
 import os
 import logging
@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 from mcp.server.fastmcp import FastMCP
 from server.config import config
 from server.db import pool
+from server.governance.policy import build_governance_policy
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -82,6 +83,9 @@ mcp = FastMCP(
     port=_port,
 )
 
+# Build governance policy (env vars + optional YAML)
+governance = build_governance_policy()
+
 # Register all tool modules
 from server.tools.query import register_query_tools
 from server.tools.schema import register_schema_tools
@@ -95,17 +99,47 @@ from server.tools.feature_store import register_feature_store_tools
 from server.resources.insights import register_insight_resources
 from server.prompts.templates import register_prompts
 
-register_query_tools(mcp)
+register_query_tools(mcp, governance)   # SQL governance via GovernancePolicy
 register_schema_tools(mcp)
 register_instance_tools(mcp)
 register_branching_tools(mcp)
-register_compute_tools(mcp)       # NEW: 6 autoscaling tools
+register_compute_tools(mcp)
 register_migration_tools(mcp)
 register_sync_tools(mcp)
 register_quality_tools(mcp)
 register_feature_store_tools(mcp)
 register_insight_resources(mcp)
 register_prompts(mcp)
+
+
+def _apply_tool_governance(mcp_instance: FastMCP):
+    """Apply tool-level governance middleware by wrapping ToolManager.call_tool.
+
+    Intercepts every tool invocation to check tool access permissions
+    before the handler executes. Only active when tool governance is configured
+    (tool_profile, tool_allowed, or tool_denied env vars are set).
+    """
+    if not governance.tool_policy.allowed_tools and not governance.tool_policy.denied_tools:
+        logger.info("Tool-level governance: inactive (no tool restrictions configured)")
+        return
+
+    original_call_tool = mcp_instance._tool_manager.call_tool
+
+    async def governed_call_tool(name, arguments, context=None, convert_result=False):
+        allowed, error_msg = governance.check_tool_access(name)
+        if not allowed:
+            return [{"type": "text", "text": f"Error: {error_msg}"}]
+        return await original_call_tool(name, arguments, context, convert_result)
+
+    mcp_instance._tool_manager.call_tool = governed_call_tool
+    logger.info(
+        f"Tool-level governance: active "
+        f"(allow={len(governance.tool_policy.allowed_tools)}, "
+        f"deny={len(governance.tool_policy.denied_tools)})"
+    )
+
+
+_apply_tool_governance(mcp)
 
 
 def main():
