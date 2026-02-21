@@ -1,13 +1,13 @@
-command: ['uv', 'run', 'lakebase-mcp']
+command: ['python', '-m', 'server.main']
 env:
   # Lakebase connection (primary)
   - name: LAKEBASE_HOST
-    valueFrom: secret
+    value: "ep-hidden-haze-d2v9brhq.database.us-east-1.cloud.databricks.com"
   - name: LAKEBASE_DATABASE
-    valueFrom: secret
-  # Read replica (optional — leave empty if no replica)
+    value: "databricks_postgres"
+  # Read replica (optional)
   - name: LAKEBASE_REPLICA_HOST
-    valueFrom: secret
+    value: ""
   # Safety
   - name: LAKEBASE_ALLOW_WRITE
     value: "false"

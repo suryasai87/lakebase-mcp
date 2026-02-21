@@ -3,6 +3,7 @@
 Merged: base server + autoscaling compute tools + replica pool initialization.
 27 tools, 4 prompts, 1 resource.
 """
+import os
 import logging
 from contextlib import asynccontextmanager
 from mcp.server.fastmcp import FastMCP
@@ -13,34 +14,72 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+def _build_conninfo(host: str, port: int) -> str:
+    """Build psycopg conninfo string.
+
+    Authentication is handled externally via:
+    - .pgpass file (local dev with oauth_auto_token_rotation)
+    - Databricks SP token (on Databricks Apps, set PGPASSWORD or .pgpass)
+    - LAKEBASE_PG_USER / LAKEBASE_PG_PASSWORD env vars (explicit)
+    """
+    parts = [
+        f"host={host}",
+        f"port={port}",
+        f"dbname={config.lakebase_database}",
+        f"sslmode=require",
+        f"connect_timeout={config.query_timeout_seconds}",
+    ]
+
+    pg_user = os.environ.get("LAKEBASE_PG_USER", "")
+    pg_password = os.environ.get("LAKEBASE_PG_PASSWORD", "")
+
+    if pg_user:
+        parts.append(f"user={pg_user}")
+    if pg_password:
+        parts.append(f"password={pg_password}")
+
+    return " ".join(parts)
+
+
 @asynccontextmanager
 async def app_lifespan():
     """Initialize and tear down resources."""
-    primary_conninfo = (
-        f"host={config.lakebase_host} port={config.lakebase_port} "
-        f"dbname={config.lakebase_database} "
-        f"connect_timeout={config.query_timeout_seconds}"
-    )
+    if config.lakebase_host:
+        primary_conninfo = _build_conninfo(config.lakebase_host, config.lakebase_port)
+        replica_conninfo = None
+        if config.replica_host:
+            replica_conninfo = _build_conninfo(config.replica_host, config.replica_port)
 
-    replica_conninfo = None
-    if config.replica_host:
-        replica_conninfo = (
-            f"host={config.replica_host} port={config.replica_port} "
-            f"dbname={config.lakebase_database} "
-            f"connect_timeout={config.query_timeout_seconds}"
+        try:
+            await pool.initialize(primary_conninfo, replica_conninfo=replica_conninfo)
+            logger.info("Lakebase MCP Server started (autoscaling-aware, pool connected)")
+        except Exception as e:
+            logger.warning(
+                f"Pool initialization failed (tools will retry on first call): {e}"
+            )
+    else:
+        logger.info(
+            "Lakebase MCP Server started (no LAKEBASE_HOST set — "
+            "compute/schema tools available, query tools will fail until configured)"
         )
 
-    await pool.initialize(primary_conninfo, replica_conninfo=replica_conninfo)
-    logger.info("Lakebase MCP Server started (autoscaling-aware)")
     yield {"pool": pool}
-    await pool.close()
+
+    try:
+        await pool.close()
+    except Exception:
+        pass
     logger.info("Lakebase MCP Server stopped")
 
+
+_port = int(os.environ.get("APP_PORT", "8000"))
 
 mcp = FastMCP(
     "lakebase_mcp",
     lifespan=app_lifespan,
     stateless_http=True,
+    host="0.0.0.0",
+    port=_port,
 )
 
 # Register all tool modules
@@ -70,9 +109,7 @@ register_prompts(mcp)
 
 
 def main():
-    import os
-    port = int(os.environ.get("APP_PORT", "8000"))
-    mcp.run(transport="streamable_http", port=port)
+    mcp.run(transport="streamable-http")
 
 
 if __name__ == "__main__":
