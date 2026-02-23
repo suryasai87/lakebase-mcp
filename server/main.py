@@ -29,6 +29,7 @@ def _build_conninfo(host: str, port: int) -> str:
         f"dbname={config.lakebase_database}",
         f"sslmode=require",
         f"connect_timeout={config.query_timeout_seconds}",
+        "application_name=lakebase_mcp",
     ]
 
     pg_user = os.environ.get("LAKEBASE_PG_USER", "")
@@ -145,7 +146,17 @@ _apply_tool_governance(mcp)
 
 
 def main():
-    mcp.run(transport="streamable-http")
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Lakebase MCP Server")
+    parser.add_argument(
+        "--transport",
+        choices=["stdio", "streamable-http"],
+        default="streamable-http",
+        help="MCP transport protocol (default: streamable-http)",
+    )
+    args = parser.parse_args()
+    mcp.run(transport=args.transport)
 
 
 if __name__ == "__main__":

@@ -11,10 +11,13 @@ This server gives AI agents (Claude, GPT, Copilot, etc.) full control over Lakeb
 - **31 tools** across 10 categories — query, schema, projects, branching, compute, migration, sync, quality, feature store, UC governance
 - **4 prompt templates** — guided workflows for exploration, migration, sync, and autoscaling tuning
 - **1 session resource** — `memo://insights` for accumulating observations during analysis
+- **Interactive UI dashboard** — 5-page React + FastAPI app with tool explorer, governance matrix, connection wizard, and pricing calculator
 - **Autoscaling-aware** — exponential backoff retry for scale-to-zero, read replica routing, compute lifecycle management
 - **Safety-first** — write guard, dangerous function blocking, production branch protection, read-only transaction enforcement
 - **Dual output** — markdown tables (human-friendly) or JSON (programmatic) for every tool
 - **Fully async** — built on FastMCP with `psycopg` 3.x async connection pooling
+- **Query cost attribution** — SQL comment tagging (`/* lakebase_mcp:tool_name */`) + `application_name` for pg_stat_activity
+- **Transport flexibility** — streamable-http (default, production) or stdio (`--transport stdio` for Claude Desktop)
 
 ---
 
@@ -164,6 +167,26 @@ When compute is suspended, the first connection attempt fails. The server retrie
 | Table not found | "Use `lakebase_list_tables` to discover available tables." |
 | Syntax error | "SQL syntax error — {details}." |
 | Query timeout | "Try limiting rows with LIMIT or simplifying query." |
+
+---
+
+## Query Cost Attribution
+
+Inspired by Snowflake's `QUERY_TAG` pattern, Lakebase MCP provides two layers of query attribution for cost tracking and observability:
+
+### 1. Application-Level Tagging
+All connections include `application_name=lakebase_mcp` in the connection string. This appears in:
+- `pg_stat_activity.application_name` — identify MCP sessions in active queries
+- PostgreSQL logs — filter MCP traffic in log analysis
+
+### 2. Tool-Level SQL Comments
+Each query is prefixed with a SQL comment identifying the originating tool:
+```sql
+/* lakebase_mcp:lakebase_read_query */ SELECT * FROM users LIMIT 10;
+```
+This appears in:
+- `pg_stat_statements` — aggregate cost by tool
+- Query logs — trace individual tool invocations
 
 ---
 
@@ -317,6 +340,63 @@ All three layers must permit an operation for it to succeed.
 
 ---
 
+## UI Dashboard
+
+A full-featured React + FastAPI web app for exploring, configuring, and estimating costs for the Lakebase MCP Server. Deployed as a Databricks App.
+
+### Pages (5)
+
+| Page | Path | Description |
+|------|------|-------------|
+| **Home** | `/` | Stats overview (31 tools, 14 categories, 4 profiles, 4 prompts), quick links |
+| **Tool Explorer** | `/tools` | Browse all 31 tools by category, search, filter, view parameters and annotations |
+| **Connect** | `/connect` | Connection wizard with config snippets for Claude Desktop, Claude Code, Python, curl |
+| **Governance** | `/governance` | Interactive access control matrices for SQL profiles and tool profiles |
+| **Pricing Calculator** | `/pricing` | Token cost estimator, compute/storage calculators, competitive comparison |
+
+### Pricing Calculator
+
+The pricing page provides interactive cost estimation across three dimensions:
+
+- **Token Cost Calculator** — Select Claude model (Opus/Sonnet/Haiku), adjust tool calls per session, see per-call and per-session costs. Includes model recommendation banners (e.g., "Switch to Sonnet for 40% savings")
+- **Compute Cost Estimator** — Choose CU size (0.5-32), region, and usage pattern (always-on vs scale-to-zero). Calculates monthly DBU cost
+- **Storage Cost Estimator** — Input database size and branches. Highlights that branches are free (copy-on-write)
+- **Total Monthly Estimate** — Combined token + compute + storage with adjustable sessions/month
+- **Competitive Comparison** — Side-by-side Lakebase vs Snowflake MCP vs Teradata MCP: compute costs, session costs, tool counts, governance layers, and key differentiators
+- **Cost Optimization Tips** — Actionable recommendations (prompt caching, model selection, scale-to-zero, batch API)
+
+### Build and Deploy
+
+```bash
+# Build frontend
+python ui/build.py
+
+# Deploy to Databricks Apps
+python ui/deploy_to_databricks.py --app-name lakebase-mcp-ui
+
+# Hard redeploy (delete and recreate)
+python ui/deploy_to_databricks.py --app-name lakebase-mcp-ui --hard-redeploy
+```
+
+### UI Tests (44 tests)
+
+```bash
+cd ui/frontend
+npx vitest run
+```
+
+| Test Suite | Tests | Coverage |
+|-----------|-------|----------|
+| App.test.jsx | 7 | Routing, navigation, all 5 pages |
+| PricingCalculator.test.jsx | 10 | All 6 sections, model selector, optimization tips |
+| ConnectionWizard.test.jsx | 7 | Config generation, copy buttons, tabs |
+| ToolCard.test.jsx | 6 | Tool rendering, parameters, annotations |
+| GovernanceMatrix.test.jsx | 5 | Profile matrices, SQL/tool governance |
+| CategoryAccordion.test.jsx | 4 | Category grouping, expansion, tool counts |
+| ProfileSelector.test.jsx | 5 | Profile switching, badge counts |
+
+---
+
 ## Quick Start
 
 ### Prerequisites
@@ -366,10 +446,14 @@ export LAKEBASE_POOL_MAX_IDLE="60"
 ### 3. Run Locally
 
 ```bash
+# Default: Streamable HTTP (production, stateless, horizontal scaling)
 uv run lakebase-mcp
+
+# Alternative: stdio transport (for Claude Desktop direct integration)
+uv run lakebase-mcp --transport stdio
 ```
 
-The server starts on `http://localhost:8000/mcp` using Streamable HTTP transport.
+The server starts on `http://localhost:8000/mcp` using Streamable HTTP transport by default.
 
 ### 4. Connect an AI Agent
 
@@ -478,7 +562,7 @@ lakebase-mcp/
 ├── server/
 │   ├── main.py              # FastMCP server, lifespan, tool registration, governance wiring
 │   ├── config.py            # Environment-based configuration (19 vars)
-│   ├── db.py                # Async connection pool (S2Z retry + replica routing)
+│   ├── db.py                # Async connection pool (S2Z retry + replica routing + query tagging)
 │   ├── auth.py              # Databricks SDK auth (OBO + standard) + UC permissions
 │   ├── governance/
 │   │   ├── sql_guard.py     # sqlglot-based SQL statement classification (17 types)
@@ -503,6 +587,28 @@ lakebase-mcp/
 │       ├── errors.py        # Autoscaling-aware error handling
 │       ├── formatting.py    # Markdown/JSON response formatting
 │       └── pagination.py    # Cursor-based pagination
+├── ui/
+│   ├── backend/
+│   │   ├── app.py           # FastAPI app serving React SPA + API
+│   │   └── routers/
+│   │       └── metadata.py  # 12 API endpoints (tools, governance, pricing)
+│   ├── frontend/
+│   │   ├── src/
+│   │   │   ├── App.jsx      # Router with 5 animated pages
+│   │   │   ├── components/
+│   │   │   │   └── Layout.jsx  # Sidebar navigation, app bar
+│   │   │   ├── pages/
+│   │   │   │   ├── Home.jsx              # Dashboard with stats and quick links
+│   │   │   │   ├── ToolExplorer.jsx      # Tool browser with search and filters
+│   │   │   │   ├── ConnectionWizard.jsx  # MCP client connection setup
+│   │   │   │   ├── GovernanceDashboard.jsx # Access control matrices
+│   │   │   │   └── PricingCalculator.jsx # Cost estimators and comparison
+│   │   │   └── hooks/
+│   │   │       └── useApi.js  # Shared fetch hook
+│   │   └── __tests__/       # 44 Vitest tests (7 suites)
+│   ├── build.py             # Frontend build script
+│   ├── deploy_to_databricks.py  # Staging-based deployment
+│   └── app.yaml             # Databricks App config for UI
 ├── tests/
 │   ├── test_unit/           # 39+ unit tests (no connection needed)
 │   ├── test_integration/    # Live connection tests
@@ -511,7 +617,7 @@ lakebase-mcp/
 │   └── register_mcp_catalog.py  # Unity Catalog registration
 ├── eval/
 │   └── evaluation.xml       # 10 evaluation Q&A pairs
-├── app.yaml                 # Databricks App configuration
+├── app.yaml                 # Databricks App configuration (MCP server)
 ├── pyproject.toml           # Project metadata (v0.2.0)
 ├── requirements.txt         # Pip-compatible requirements (includes sqlglot for SQL governance)
 └── TESTING_SCENARIOS.md     # Comprehensive test scenarios for all 27+ capabilities

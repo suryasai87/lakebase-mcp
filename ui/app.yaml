@@ -1,0 +1,10 @@
+command:
+  - uvicorn
+  - ui.backend.app:app
+  - --host
+  - "0.0.0.0"
+  - --port
+  - "8000"
+env:
+  - name: APP_PORT
+    value: "8000"

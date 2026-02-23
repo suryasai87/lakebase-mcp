@@ -121,28 +121,32 @@ class LakebasePool:
         )
 
     async def execute_query(
-        self, sql: str, params: tuple = None, max_rows: int = None
+        self, sql: str, params: tuple = None, max_rows: int = None,
+        tool_name: str = None,
     ) -> list[dict[str, Any]]:
         """Execute a SQL query (read-write) and return results as list of dicts."""
         effective_max = max_rows or config.max_rows
+        tagged_sql = f"/* lakebase_mcp:{tool_name} */ {sql}" if tool_name else sql
         async with self.connection() as conn:
             async with conn.cursor() as cur:
-                await cur.execute(sql, params, prepare=True)
+                await cur.execute(tagged_sql, params, prepare=True)
                 if cur.description:
                     rows = await cur.fetchmany(effective_max)
                     return [dict(row) for row in rows]
                 return [{"affected_rows": cur.rowcount}]
 
     async def execute_readonly(
-        self, sql: str, params: tuple = None, max_rows: int = None
+        self, sql: str, params: tuple = None, max_rows: int = None,
+        tool_name: str = None,
     ) -> list[dict]:
         """Execute query in a read-only transaction, routed to replica if available."""
         effective_max = max_rows or config.max_rows
+        tagged_sql = f"/* lakebase_mcp:{tool_name} */ {sql}" if tool_name else sql
         async with self.connection(prefer_replica=True) as conn:
             async with conn.transaction():
                 await conn.execute("SET TRANSACTION READ ONLY")
                 async with conn.cursor() as cur:
-                    await cur.execute(sql, params)
+                    await cur.execute(tagged_sql, params)
                     if cur.description:
                         rows = await cur.fetchmany(effective_max)
                         return [dict(row) for row in rows]

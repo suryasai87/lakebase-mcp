@@ -36,5 +36,11 @@ coverage.xml
 # uv
 uv.lock
 
+# Node / Frontend
+node_modules/
+ui/frontend/node_modules/
+ui/frontend/dist/
+ui/backend/static/
+
 # Misc
 *.log
