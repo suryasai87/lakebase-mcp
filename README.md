@@ -71,8 +71,8 @@ This server gives AI agents (Claude, GPT, Copilot, etc.) full control over Lakeb
 
 | Tool | Description |
 |------|-------------|
-| `lakebase_prepare_migration` | Create temporary branch from production, apply DDL. Returns branch name for testing |
-| `lakebase_complete_migration` | `apply=true`: replay DDL on production. `apply=false`: delete branch, discard changes |
+| `lakebase_prepare_migration` | Create temporary branch from production for testing DDL changes. **Note:** branch is created but DDL is not yet auto-applied — run the migration SQL manually on the branch, then use `complete_migration` |
+| `lakebase_complete_migration` | `apply=true`: marks migration as applied (DDL replay on production not yet implemented — run DDL manually). `apply=false`: delete branch, discard changes |
 
 ### Sync Tools (2)
 
@@ -492,7 +492,7 @@ async with streamablehttp_client("http://localhost:8000/mcp") as (read, write, _
     async with ClientSession(read, write) as session:
         await session.initialize()
 
-        # List all 27 tools
+        # List all 31 tools
         tools = await session.list_tools()
 
         # Run a query
@@ -620,7 +620,7 @@ lakebase-mcp/
 ├── app.yaml                 # Databricks App configuration (MCP server)
 ├── pyproject.toml           # Project metadata (v0.2.0)
 ├── requirements.txt         # Pip-compatible requirements (includes sqlglot for SQL governance)
-└── TESTING_SCENARIOS.md     # Comprehensive test scenarios for all 27+ capabilities
+└── TESTING_SCENARIOS.md     # Comprehensive test scenarios for all 31 tools
 ```
 
 ---
@@ -726,6 +726,29 @@ The server supports multiple authentication modes:
 | **Explicit credentials** | CI/CD, service accounts | `LAKEBASE_PG_USER` + `LAKEBASE_PG_PASSWORD` env vars |
 
 Unity Catalog permissions are enforced at the database layer — the server does not bypass access controls.
+
+---
+
+## Known Limitations & Roadmap
+
+The following gaps were identified comparing the MCP implementation against the latest Databricks Lakebase APIs (April 2026):
+
+| # | Severity | Gap | Status |
+|---|----------|-----|--------|
+| GAP-1 | MEDIUM | CU spread validation uses 8 CU max — Databricks docs indicate 16 CU max spread | Code fix needed |
+| GAP-2 | LOW | Autoscaling min/max CU not validated against tier-specific constraints | Enhancement |
+| GAP-3 | HIGH | Migration tools are partial stubs — `prepare_migration` creates branch but doesn't execute DDL; `complete_migration(apply=true)` returns success without replaying DDL on production | Code fix needed |
+| GAP-4 | HIGH | No Synced Tables API support (Delta → Lakebase reverse sync via `/api/2.0/lakebase/projects/{name}/synced_tables`) | New feature |
+| GAP-5 | MEDIUM | No endpoint management tools (create/update/delete endpoints via REST API) | New feature |
+| GAP-6 | MEDIUM | No credential/connection-string management via Lakebase REST API | New feature |
+| GAP-7 | LOW | Missing `pg_stat_replication` and `pg_stat_wal` monitoring queries | Enhancement |
+| GAP-8 | MEDIUM | SQL/tool governance only wired to query tools — branch, compute, and sync tools bypass governance checks | Code fix needed |
+| GAP-9 | HIGH | `get_connection_string` returns credentials in plaintext response — should redact or use short-lived tokens | Security fix needed |
+| GAP-10 | LOW | No WAL-based CDC (`wal2delta`) monitoring integration | New feature |
+| GAP-11 | LOW | No project-level CRUD (create/delete projects via API) | New feature |
+| GAP-12 | LOW | No Lakehouse Sync status polling via REST API | New feature |
+
+Full gap analysis with recommendations: [Confluence — Lakebase MCP Server](https://databricks.atlassian.net/wiki/spaces/FE/pages/6179390187)
 
 ---
 
