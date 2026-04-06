@@ -7,7 +7,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-from ui.backend.routers.metadata import router as metadata_router
+try:
+    from ui.backend.routers.metadata import router as metadata_router
+except ImportError:
+    from backend.routers.metadata import router as metadata_router
 
 app = FastAPI(title="Lakebase MCP UI", version="1.0.0")
 

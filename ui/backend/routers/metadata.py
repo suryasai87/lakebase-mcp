@@ -5,8 +5,50 @@ to stay in sync. Tool descriptions maintained here alongside source.
 """
 from fastapi import APIRouter
 
-from server.governance.tool_guard import TOOL_CATEGORIES, TOOL_PROFILES
-from server.governance.sql_guard import PROFILES as SQL_PROFILES, SQLStatementType
+try:
+    from server.governance.tool_guard import TOOL_CATEGORIES, TOOL_PROFILES
+    from server.governance.sql_guard import PROFILES as SQL_PROFILES, SQLStatementType
+except ImportError:
+    # Standalone deployment — inline governance data for UI rendering
+    from enum import Enum
+
+    class SQLStatementType(str, Enum):
+        SELECT = "select"; INSERT = "insert"; UPDATE = "update"; DELETE = "delete"
+        CREATE = "create"; DROP = "drop"; ALTER = "alter"; MERGE = "merge"
+        TRUNCATE = "truncate"; GRANT = "grant"; REVOKE = "revoke"; USE = "use"
+        SHOW = "show"; DESCRIBE = "describe"; EXPLAIN = "explain"; SET = "set"
+        CALL = "call"
+
+    TOOL_CATEGORIES = {
+        "sql_query": ["lakebase_execute_query", "lakebase_read_query", "lakebase_explain_query"],
+        "schema_read": ["lakebase_list_schemas", "lakebase_list_tables", "lakebase_describe_table", "lakebase_object_tree"],
+        "project_read": ["lakebase_list_projects", "lakebase_describe_project", "lakebase_get_connection_string"],
+        "branch_read": ["lakebase_list_branches"],
+        "branch_write": ["lakebase_create_branch", "lakebase_delete_branch"],
+        "compute_read": ["lakebase_get_compute_status", "lakebase_get_compute_metrics"],
+        "compute_write": ["lakebase_configure_autoscaling", "lakebase_configure_scale_to_zero", "lakebase_restart_compute", "lakebase_create_read_replica"],
+        "migration": ["lakebase_prepare_migration", "lakebase_complete_migration"],
+        "sync_read": ["lakebase_list_syncs"],
+        "sync_write": ["lakebase_create_sync"],
+        "quality": ["lakebase_profile_table"],
+        "feature_read": ["lakebase_lookup_features", "lakebase_list_feature_tables"],
+        "insight": ["lakebase_append_insight"],
+        "uc_governance": ["lakebase_get_uc_permissions", "lakebase_check_my_access", "lakebase_governance_summary", "lakebase_list_catalog_grants"],
+    }
+    _READ_CATS = ["sql_query", "schema_read", "project_read", "branch_read", "compute_read", "sync_read", "quality", "feature_read", "insight", "uc_governance"]
+    TOOL_PROFILES = {
+        "read_only": _READ_CATS,
+        "analyst": _READ_CATS,
+        "developer": _READ_CATS + ["branch_write", "compute_write", "migration", "sync_write"],
+        "admin": list(TOOL_CATEGORIES.keys()),
+    }
+    _RO = {SQLStatementType.SELECT, SQLStatementType.SHOW, SQLStatementType.DESCRIBE, SQLStatementType.EXPLAIN}
+    SQL_PROFILES = {
+        "read_only": _RO,
+        "analyst": _RO | {SQLStatementType.INSERT, SQLStatementType.SET},
+        "developer": _RO | {SQLStatementType.INSERT, SQLStatementType.UPDATE, SQLStatementType.DELETE, SQLStatementType.CREATE, SQLStatementType.ALTER, SQLStatementType.SET, SQLStatementType.CALL},
+        "admin": set(SQLStatementType),
+    }
 
 router = APIRouter()
 
