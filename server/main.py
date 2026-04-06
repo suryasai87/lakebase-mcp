@@ -92,9 +92,12 @@ from server.tools.query import register_query_tools
 from server.tools.schema import register_schema_tools
 from server.tools.instance import register_instance_tools
 from server.tools.branching import register_branching_tools
+from server.tools.endpoints import register_endpoint_tools
 from server.tools.compute import register_compute_tools
 from server.tools.migration import register_migration_tools
 from server.tools.sync import register_sync_tools
+from server.tools.synced_tables import register_synced_table_tools
+from server.tools.monitoring import register_monitoring_tools
 from server.tools.quality import register_quality_tools
 from server.tools.feature_store import register_feature_store_tools
 from server.tools.uc_governance import register_uc_governance_tools
@@ -104,10 +107,13 @@ from server.prompts.templates import register_prompts
 register_query_tools(mcp, governance)   # SQL governance via GovernancePolicy
 register_schema_tools(mcp)
 register_instance_tools(mcp)
-register_branching_tools(mcp)
-register_compute_tools(mcp)
-register_migration_tools(mcp)
-register_sync_tools(mcp)
+register_branching_tools(mcp, governance)   # Tool governance for branch writes
+register_endpoint_tools(mcp)
+register_compute_tools(mcp, governance)     # Tool governance for compute writes
+register_migration_tools(mcp, governance)   # Tool governance for migration ops
+register_sync_tools(mcp, governance)        # Tool governance for sync writes
+register_synced_table_tools(mcp)
+register_monitoring_tools(mcp)
 register_quality_tools(mcp)
 register_feature_store_tools(mcp)
 register_uc_governance_tools(mcp)       # UC permissions & governance tools

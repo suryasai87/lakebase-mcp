@@ -172,7 +172,7 @@ TOOL_METADATA = {
     # --- compute_write (server/tools/compute.py) ---
     "lakebase_configure_autoscaling": {
         "title": "Configure Compute Autoscaling",
-        "description": "Configure autoscaling for a Lakebase branch compute. Each CU = 2 GB RAM. Max spread is 8 CU. Scaling happens without connection interruptions.",
+        "description": "Configure autoscaling for a Lakebase branch compute. Each CU = 2 GB RAM. Max spread is 16 CU. Scaling happens without connection interruptions.",
         "readOnlyHint": False,
         "destructiveHint": False,
         "parameters": {

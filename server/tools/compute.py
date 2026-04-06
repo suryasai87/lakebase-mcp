@@ -8,6 +8,7 @@ from typing import Optional
 from mcp.server.fastmcp import FastMCP
 from server.auth import LakebaseAuth
 from server.utils.errors import handle_error
+from server.governance.policy import GovernancePolicy
 
 
 class GetComputeStatusInput(BaseModel):
@@ -24,10 +25,14 @@ class ConfigureAutoscalingInput(BaseModel):
         ..., description="Minimum compute units (0.5 to 32)", ge=0.5, le=32
     )
     max_cu: float = Field(
-        ..., description="Maximum compute units (min_cu to min_cu+8)", ge=0.5, le=32
+        ..., description="Maximum compute units (min_cu to min_cu+16)", ge=0.5, le=32
     )
     enable_autoscaling: bool = Field(
         default=True, description="Enable/disable autoscaling"
+    )
+    tier: str = Field(
+        default="premium",
+        description="Lakebase tier: 'standard' (max 16 CU) or 'premium' (max 32 CU)",
     )
 
 
@@ -74,7 +79,7 @@ class CreateReadReplicaInput(BaseModel):
     )
 
 
-def register_compute_tools(mcp: FastMCP):
+def register_compute_tools(mcp: FastMCP, governance: GovernancePolicy = None):
 
     @mcp.tool(
         name="lakebase_get_compute_status",
@@ -128,20 +133,41 @@ def register_compute_tools(mcp: FastMCP):
 
         Rules:
         - Each CU = 2 GB RAM + proportional CPU
-        - Min CU: 0.5, Max CU: 32
-        - Max - Min cannot exceed 8 CU
+        - Standard tier: 0.5-16 CU, Premium tier: 0.5-32 CU
+        - Max - Min cannot exceed 16 CU
         - Scaling happens without connection interruptions
 
         Example: min_cu=1, max_cu=8 gives a 2-16 GB RAM range.
         """
+        if governance:
+            allowed, error_msg = governance.check_tool_access("lakebase_configure_autoscaling")
+            if not allowed:
+                return f"Error: {error_msg}"
         try:
-            if params.max_cu - params.min_cu > 8:
+            # Tier-specific CU ceiling validation
+            tier = params.tier.lower()
+            tier_limits = {"standard": 16.0, "premium": 32.0}
+            max_allowed = tier_limits.get(tier, 32.0)
+
+            if params.max_cu > max_allowed:
+                return (
+                    f"Error: max_cu ({params.max_cu}) exceeds the "
+                    f"{tier} tier limit of {max_allowed} CU. "
+                    f"Reduce max_cu to {max_allowed} or use a higher tier."
+                )
+            if params.min_cu > max_allowed:
+                return (
+                    f"Error: min_cu ({params.min_cu}) exceeds the "
+                    f"{tier} tier limit of {max_allowed} CU."
+                )
+
+            if params.max_cu - params.min_cu > 16:
                 return (
                     f"Error: Autoscaling range too wide. "
                     f"max_cu ({params.max_cu}) - min_cu ({params.min_cu}) = "
                     f"{params.max_cu - params.min_cu}, "
-                    f"but maximum allowed spread is 8 CU. "
-                    f"Try max_cu={params.min_cu + 8} or increase min_cu."
+                    f"but maximum allowed spread is 16 CU. "
+                    f"Try max_cu={params.min_cu + 16} or increase min_cu."
                 )
             auth = LakebaseAuth()
             ws = auth.workspace_client
@@ -195,6 +221,10 @@ def register_compute_tools(mcp: FastMCP):
 
         NOTE: Production branch computes have scale-to-zero disabled by default.
         """
+        if governance:
+            allowed, error_msg = governance.check_tool_access("lakebase_configure_scale_to_zero")
+            if not allowed:
+                return f"Error: {error_msg}"
         try:
             auth = LakebaseAuth()
             ws = auth.workspace_client
@@ -280,6 +310,10 @@ def register_compute_tools(mcp: FastMCP):
         - Resolve performance issues
         - Pick up Postgres extension updates
         """
+        if governance:
+            allowed, error_msg = governance.check_tool_access("lakebase_restart_compute")
+            if not allowed:
+                return f"Error: {error_msg}"
         try:
             auth = LakebaseAuth()
             ws = auth.workspace_client
@@ -324,11 +358,15 @@ def register_compute_tools(mcp: FastMCP):
 
         The replica gets its own autoscaling compute (independent from primary).
         """
+        if governance:
+            allowed, error_msg = governance.check_tool_access("lakebase_create_read_replica")
+            if not allowed:
+                return f"Error: {error_msg}"
         try:
-            if params.max_cu - params.min_cu > 8:
+            if params.max_cu - params.min_cu > 16:
                 return (
-                    f"Error: Autoscaling range too wide. Max spread is 8 CU. "
-                    f"Try max_cu={params.min_cu + 8}."
+                    f"Error: Autoscaling range too wide. Max spread is 16 CU. "
+                    f"Try max_cu={params.min_cu + 16}."
                 )
             auth = LakebaseAuth()
             ws = auth.workspace_client

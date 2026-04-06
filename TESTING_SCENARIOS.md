@@ -338,7 +338,7 @@ Or via **Claude Desktop / Claude Code** with the MCP server configured.
 
 **Steps**:
 1. Call with `min_cu: 1`, `max_cu: 4` (spread = 3, valid)
-2. Call with `min_cu: 0.5`, `max_cu: 8.5` (spread = 8, valid)
+2. Call with `min_cu: 0.5`, `max_cu: 16.5` (spread = 16, valid)
 
 **Expected**:
 - Returns JSON: `{ "status": "configured", "autoscaling_enabled": true, "min_cu": ..., "max_cu": ..., "ram_range": "..." }`
@@ -346,14 +346,14 @@ Or via **Claude Desktop / Claude Code** with the MCP server configured.
 
 ### 5.3 — `lakebase_configure_autoscaling` — Invalid Range
 
-**Purpose**: Verify autoscaling range validation (max spread = 8 CU).
+**Purpose**: Verify autoscaling range validation (max spread = 16 CU).
 
 **Steps**:
-1. Call with `min_cu: 1`, `max_cu: 10` (spread = 9, exceeds 8)
-2. Call with `min_cu: 0.5`, `max_cu: 32` (spread = 31.5, exceeds 8)
+1. Call with `min_cu: 1`, `max_cu: 18` (spread = 17, exceeds 16)
+2. Call with `min_cu: 0.5`, `max_cu: 32` (spread = 31.5, exceeds 16)
 
 **Expected**:
-- Returns error: "Autoscaling range too wide. max_cu (...) - min_cu (...) = ..., but maximum allowed spread is 8 CU."
+- Returns error: "Autoscaling range too wide. max_cu (...) - min_cu (...) = ..., but maximum allowed spread is 16 CU."
 - Suggests corrected `max_cu` value
 
 ### 5.4 — `lakebase_configure_scale_to_zero`
@@ -397,11 +397,11 @@ Or via **Claude Desktop / Claude Code** with the MCP server configured.
 
 **Steps**:
 1. Call with `min_cu: 0.5`, `max_cu: 4` (valid)
-2. Call with `min_cu: 1`, `max_cu: 10` (spread > 8, invalid)
+2. Call with `min_cu: 1`, `max_cu: 18` (spread > 16, invalid)
 
 **Expected**:
 - Step 1: Returns `{ "status": "creating", "compute_type": "read_replica", ... }`
-- Step 2: Returns error about max spread being 8 CU
+- Step 2: Returns error about max spread being 16 CU
 
 ---
 

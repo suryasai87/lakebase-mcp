@@ -8,6 +8,7 @@ from enum import Enum
 from mcp.server.fastmcp import FastMCP
 from server.auth import LakebaseAuth
 from server.utils.errors import handle_error
+from server.governance.policy import GovernancePolicy
 
 
 class SyncDirection(str, Enum):
@@ -42,7 +43,7 @@ class ListSyncsInput(BaseModel):
     project_name: str = Field(..., description="Lakebase project name")
 
 
-def register_sync_tools(mcp: FastMCP):
+def register_sync_tools(mcp: FastMCP, governance: GovernancePolicy = None):
 
     @mcp.tool(
         name="lakebase_create_sync",
@@ -66,6 +67,10 @@ def register_sync_tools(mcp: FastMCP):
         - triggered: Manual or event-triggered sync
         - continuous: Near real-time CDC-based sync
         """
+        if governance:
+            allowed, error_msg = governance.check_tool_access("lakebase_create_sync")
+            if not allowed:
+                return f"Error: {error_msg}"
         try:
             auth = LakebaseAuth()
             ws = auth.workspace_client

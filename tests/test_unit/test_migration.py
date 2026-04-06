@@ -16,6 +16,7 @@ class TestMigrationInput:
         params = CompleteMigrationInput(
             project_name="my-project",
             migration_branch="migration-abc123",
+            migration_sql="ALTER TABLE users ADD COLUMN age INT",
             apply=True,
         )
         assert params.apply is True
@@ -24,6 +25,7 @@ class TestMigrationInput:
         params = CompleteMigrationInput(
             project_name="my-project",
             migration_branch="migration-abc123",
+            migration_sql="ALTER TABLE users ADD COLUMN age INT",
             apply=False,
         )
         assert params.apply is False

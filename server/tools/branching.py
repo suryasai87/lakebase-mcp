@@ -8,6 +8,7 @@ from typing import Optional
 from mcp.server.fastmcp import FastMCP
 from server.auth import LakebaseAuth
 from server.utils.errors import handle_error
+from server.governance.policy import GovernancePolicy
 
 
 class CreateBranchInput(BaseModel):
@@ -38,7 +39,7 @@ class DeleteBranchInput(BaseModel):
     )
 
 
-def register_branching_tools(mcp: FastMCP):
+def register_branching_tools(mcp: FastMCP, governance: GovernancePolicy = None):
 
     @mcp.tool(
         name="lakebase_create_branch",
@@ -61,6 +62,10 @@ def register_branching_tools(mcp: FastMCP):
         - Data experiments and A/B testing
         - Agent sandbox environments
         """
+        if governance:
+            allowed, error_msg = governance.check_tool_access("lakebase_create_branch")
+            if not allowed:
+                return f"Error: {error_msg}"
         try:
             auth = LakebaseAuth()
             ws = auth.workspace_client
@@ -125,6 +130,10 @@ def register_branching_tools(mcp: FastMCP):
     async def lakebase_delete_branch(params: DeleteBranchInput) -> str:
         """Delete a Lakebase database branch. This is irreversible.
         The 'production' branch cannot be deleted."""
+        if governance:
+            allowed, error_msg = governance.check_tool_access("lakebase_delete_branch")
+            if not allowed:
+                return f"Error: {error_msg}"
         try:
             if params.branch_name.lower() in ("production", "main"):
                 return "Error: Cannot delete the production/main branch."

@@ -8,7 +8,7 @@ This server gives AI agents (Claude, GPT, Copilot, etc.) full control over Lakeb
 
 ## Key Capabilities
 
-- **31 tools** across 10 categories — query, schema, projects, branching, compute, migration, sync, quality, feature store, UC governance
+- **46 tools** across 13 categories — query, schema, projects, branching, compute, migration, sync, synced tables, endpoints, monitoring, quality, feature store, UC governance
 - **4 prompt templates** — guided workflows for exploration, migration, sync, and autoscaling tuning
 - **1 session resource** — `memo://insights` for accumulating observations during analysis
 - **Interactive UI dashboard** — 5-page React + FastAPI app with tool explorer, governance matrix, connection wizard, and pricing calculator
@@ -21,7 +21,7 @@ This server gives AI agents (Claude, GPT, Copilot, etc.) full control over Lakeb
 
 ---
 
-## Tool Reference (31 Tools)
+## Tool Reference (46 Tools)
 
 ### Query Tools (3)
 
@@ -40,13 +40,17 @@ This server gives AI agents (Claude, GPT, Copilot, etc.) full control over Lakeb
 | `lakebase_describe_table` | Full table schema: columns, types, nullability, defaults, length/precision, indexes with definitions |
 | `lakebase_object_tree` | Hierarchical JSON tree: schemas -> tables -> columns. Includes TABLE, VIEW, MATERIALIZED VIEW |
 
-### Project Management Tools (3)
+### Project Management Tools (7)
 
 | Tool | Description |
 |------|-------------|
 | `lakebase_list_projects` | List all Lakebase projects in the workspace via Databricks API. Optional catalog filter |
 | `lakebase_describe_project` | Detailed project info: configuration, branches, compute sizes, storage usage, sync pipelines |
-| `lakebase_get_connection_string` | Get PostgreSQL connection string with temporary credentials via Databricks credential vending. Supports primary and replica endpoints |
+| `lakebase_get_connection_string` | Get PostgreSQL connection string with temporary credentials via Databricks credential vending. Supports primary and replica endpoints. **Passwords redacted by default** |
+| `lakebase_create_project` | Create a new Lakebase project via Databricks REST API. Specify catalog, tier, and initial compute configuration |
+| `lakebase_delete_project` | Delete a Lakebase project (irreversible). Requires confirmation parameter to prevent accidental deletion |
+| `lakebase_rotate_credentials` | Rotate PostgreSQL credentials for a Lakebase project. Generates new short-lived tokens via credential vending |
+| `lakebase_list_credentials` | List active credentials/sessions for a Lakebase project. Shows credential age and expiration |
 
 ### Branching Tools (3)
 
@@ -61,7 +65,7 @@ This server gives AI agents (Claude, GPT, Copilot, etc.) full control over Lakeb
 | Tool | Description |
 |------|-------------|
 | `lakebase_get_compute_status` | Current state (`active`/`suspended`/`scaling_up`/`scaling_down`), CU allocation, connections, uptime |
-| `lakebase_configure_autoscaling` | Set min/max CU range. Rules: each CU = 2 GB RAM, max spread = 8 CU, 0.5–32 CU range. No restart needed |
+| `lakebase_configure_autoscaling` | Set min/max CU range. Rules: each CU = 2 GB RAM, max spread = 16 CU, 0.5–32 CU range. No restart needed |
 | `lakebase_configure_scale_to_zero` | Enable/disable auto-suspend with inactivity timeout (60–3600s). Dev: 60s, Staging: 300s, Prod: disabled |
 | `lakebase_get_compute_metrics` | Time-series: CPU%, memory%, working set, connections, state transitions. Lookback: 5–1440 minutes |
 | `lakebase_restart_compute` | Restart compute (interrupts active connections). For config changes, performance issues, or extension updates |
@@ -71,8 +75,8 @@ This server gives AI agents (Claude, GPT, Copilot, etc.) full control over Lakeb
 
 | Tool | Description |
 |------|-------------|
-| `lakebase_prepare_migration` | Create temporary branch from production for testing DDL changes. **Note:** branch is created but DDL is not yet auto-applied — run the migration SQL manually on the branch, then use `complete_migration` |
-| `lakebase_complete_migration` | `apply=true`: marks migration as applied (DDL replay on production not yet implemented — run DDL manually). `apply=false`: delete branch, discard changes |
+| `lakebase_prepare_migration` | Create temporary branch from production, execute DDL migration SQL on the branch, and validate results before promoting |
+| `lakebase_complete_migration` | `apply=true`: replay DDL on production branch and clean up migration branch. `apply=false`: delete branch, discard changes |
 
 ### Sync Tools (2)
 
@@ -80,6 +84,32 @@ This server gives AI agents (Claude, GPT, Copilot, etc.) full control over Lakeb
 |------|-------------|
 | `lakebase_create_sync` | Create Delta <-> Lakebase sync pipeline. Directions: `delta_to_lakebase`, `lakebase_to_delta`. Frequencies: `snapshot`, `triggered`, `continuous` |
 | `lakebase_list_syncs` | List all sync pipelines with source, target, direction, frequency, status, last sync time |
+
+### Synced Tables Tools (4)
+
+| Tool | Description |
+|------|-------------|
+| `lakebase_list_synced_tables` | List all synced tables for a Lakebase project via the Synced Tables API. Shows source Delta table, sync status, and last sync time |
+| `lakebase_create_synced_table` | Create a new synced table (Delta to Lakebase reverse sync) via `/api/2.0/lakebase/projects/{name}/synced_tables`. Specify source catalog, schema, and table |
+| `lakebase_delete_synced_table` | Remove a synced table configuration. Stops ongoing sync and cleans up the Lakebase-side replica |
+| `lakebase_get_synced_table_status` | Get detailed sync status for a specific synced table: lag, throughput, last sync time, error state |
+
+### Endpoint Management Tools (4)
+
+| Tool | Description |
+|------|-------------|
+| `lakebase_list_endpoints` | List all endpoints (primary and replica) for a Lakebase project with connection details and status |
+| `lakebase_create_endpoint` | Create a new endpoint (e.g., read replica endpoint) for a Lakebase project via REST API |
+| `lakebase_update_endpoint` | Update endpoint configuration: autoscaling CU range, allowed IP list, SSL mode |
+| `lakebase_delete_endpoint` | Delete a non-primary endpoint. Primary endpoints cannot be deleted |
+
+### Monitoring Tools (3)
+
+| Tool | Description |
+|------|-------------|
+| `lakebase_replication_status` | Query `pg_stat_replication` for active replication slots, WAL lag, replay lag, and replica state |
+| `lakebase_wal_statistics` | Query `pg_stat_wal` for WAL generation rate, buffers, sync metrics. Useful for sizing and CDC throughput estimation |
+| `lakebase_cdc_monitor` | Monitor WAL-based CDC (`wal2delta`) pipeline: slot status, confirmed flush LSN, replication lag, consumer health |
 
 ### Data Quality Tools (1)
 
@@ -202,6 +232,7 @@ This appears in:
 | **Production branch protection** | `lakebase_delete_branch` refuses to delete `production` or `main` |
 | **Row limits** | Queries capped at `LAKEBASE_MAX_ROWS` (default: 1000) |
 | **Query timeout** | `connect_timeout` enforced via `LAKEBASE_QUERY_TIMEOUT` (default: 30s) |
+| **Credential redaction** | `get_connection_string` redacts passwords by default — returns `****` unless `show_password=true` is explicitly passed |
 | **Input validation** | Pydantic models enforce bounds on all parameters (CU ranges, timeouts, sample sizes) |
 
 ---
@@ -240,10 +271,10 @@ The server classifies SQL using **sqlglot AST parsing** (not regex) to accuratel
 
 | Profile | Allowed Tool Categories |
 |---------|------------------------|
-| `read_only` | sql_query, schema_read, project_read, branch_read, compute_read, sync_read, quality, feature_read, insight |
+| `read_only` | sql_query, schema_read, project_read, branch_read, compute_read, sync_read, synced_tables_read, endpoint_read, monitoring, quality, feature_read, insight |
 | `analyst` | Same as read_only |
-| `developer` | read_only + branch_write, compute_write, migration, sync_write |
-| `admin` | All 13 categories |
+| `developer` | read_only + branch_write, compute_write, migration, sync_write, synced_tables_write, endpoint_write |
+| `admin` | All 16 categories |
 
 ### Quick Start Examples
 
@@ -348,8 +379,8 @@ A full-featured React + FastAPI web app for exploring, configuring, and estimati
 
 | Page | Path | Description |
 |------|------|-------------|
-| **Home** | `/` | Stats overview (31 tools, 14 categories, 4 profiles, 4 prompts), quick links |
-| **Tool Explorer** | `/tools` | Browse all 31 tools by category, search, filter, view parameters and annotations |
+| **Home** | `/` | Stats overview (46 tools, 16 categories, 4 profiles, 4 prompts), quick links |
+| **Tool Explorer** | `/tools` | Browse all 46 tools by category, search, filter, view parameters and annotations |
 | **Connect** | `/connect` | Connection wizard with config snippets for Claude Desktop, Claude Code, Python, curl |
 | **Governance** | `/governance` | Interactive access control matrices for SQL profiles and tool profiles |
 | **Pricing Calculator** | `/pricing` | Token cost estimator, compute/storage calculators, competitive comparison |
@@ -492,7 +523,7 @@ async with streamablehttp_client("http://localhost:8000/mcp") as (read, write, _
     async with ClientSession(read, write) as session:
         await session.initialize()
 
-        # List all 31 tools
+        # List all 46 tools
         tools = await session.list_tools()
 
         # Run a query
@@ -566,16 +597,19 @@ lakebase-mcp/
 │   ├── auth.py              # Databricks SDK auth (OBO + standard) + UC permissions
 │   ├── governance/
 │   │   ├── sql_guard.py     # sqlglot-based SQL statement classification (17 types)
-│   │   ├── tool_guard.py    # Per-tool access control (13 categories, 4 profiles)
+│   │   ├── tool_guard.py    # Per-tool access control (16 categories, 4 profiles)
 │   │   └── policy.py        # Unified policy engine (env vars + YAML)
 │   ├── tools/
 │   │   ├── query.py         # 3 tools: read, execute, explain
 │   │   ├── schema.py        # 4 tools: schemas, tables, describe, tree
-│   │   ├── instance.py      # 3 tools: projects, describe, connection string
+│   │   ├── instance.py      # 7 tools: projects, describe, connection string, create/delete project, credentials
 │   │   ├── branching.py     # 3 tools: create, list, delete branches
 │   │   ├── compute.py       # 6 tools: autoscaling, S2Z, metrics, replicas
 │   │   ├── migration.py     # 2 tools: prepare, complete
 │   │   ├── sync.py          # 2 tools: create sync, list syncs
+│   │   ├── synced_tables.py # 4 tools: list, create, delete, status for synced tables
+│   │   ├── endpoints.py    # 4 tools: list, create, update, delete endpoints
+│   │   ├── monitoring.py   # 3 tools: replication status, WAL stats, CDC monitor
 │   │   ├── quality.py       # 1 tool: profile table
 │   │   ├── feature_store.py # 2 tools: lookup, list feature tables
 │   │   └── uc_governance.py # 4 tools: UC permissions, access check, governance summary, catalog grants
@@ -620,7 +654,7 @@ lakebase-mcp/
 ├── app.yaml                 # Databricks App configuration (MCP server)
 ├── pyproject.toml           # Project metadata (v0.2.0)
 ├── requirements.txt         # Pip-compatible requirements (includes sqlglot for SQL governance)
-└── TESTING_SCENARIOS.md     # Comprehensive test scenarios for all 31 tools
+└── TESTING_SCENARIOS.md     # Comprehensive test scenarios for all 46 tools
 ```
 
 ---
@@ -735,18 +769,18 @@ The following gaps were identified comparing the MCP implementation against the 
 
 | # | Severity | Gap | Status |
 |---|----------|-----|--------|
-| GAP-1 | MEDIUM | CU spread validation uses 8 CU max — Databricks docs indicate 16 CU max spread | Code fix needed |
-| GAP-2 | LOW | Autoscaling min/max CU not validated against tier-specific constraints | Enhancement |
-| GAP-3 | HIGH | Migration tools are partial stubs — `prepare_migration` creates branch but doesn't execute DDL; `complete_migration(apply=true)` returns success without replaying DDL on production | Code fix needed |
-| GAP-4 | HIGH | No Synced Tables API support (Delta → Lakebase reverse sync via `/api/2.0/lakebase/projects/{name}/synced_tables`) | New feature |
-| GAP-5 | MEDIUM | No endpoint management tools (create/update/delete endpoints via REST API) | New feature |
-| GAP-6 | MEDIUM | No credential/connection-string management via Lakebase REST API | New feature |
-| GAP-7 | LOW | Missing `pg_stat_replication` and `pg_stat_wal` monitoring queries | Enhancement |
-| GAP-8 | MEDIUM | SQL/tool governance only wired to query tools — branch, compute, and sync tools bypass governance checks | Code fix needed |
-| GAP-9 | HIGH | `get_connection_string` returns credentials in plaintext response — should redact or use short-lived tokens | Security fix needed |
-| GAP-10 | LOW | No WAL-based CDC (`wal2delta`) monitoring integration | New feature |
-| GAP-11 | LOW | No project-level CRUD (create/delete projects via API) | New feature |
-| GAP-12 | LOW | No Lakehouse Sync status polling via REST API | New feature |
+| GAP-1 | MEDIUM | CU spread validation uses 8 CU max — Databricks docs indicate 16 CU max spread | **Fixed in v0.3.0** — max spread updated to 16 CU |
+| GAP-2 | LOW | Autoscaling min/max CU not validated against tier-specific constraints | **Fixed in v0.3.0** — tier-aware validation added |
+| GAP-3 | HIGH | Migration tools are partial stubs — `prepare_migration` creates branch but doesn't execute DDL; `complete_migration(apply=true)` returns success without replaying DDL on production | **Fixed in v0.3.0** — migrations now execute DDL on branch and replay on production |
+| GAP-4 | HIGH | No Synced Tables API support (Delta to Lakebase reverse sync via `/api/2.0/lakebase/projects/{name}/synced_tables`) | **Fixed in v0.3.0** — 4 synced tables tools added |
+| GAP-5 | MEDIUM | No endpoint management tools (create/update/delete endpoints via REST API) | **Fixed in v0.3.0** — 4 endpoint management tools added |
+| GAP-6 | MEDIUM | No credential/connection-string management via Lakebase REST API | **Fixed in v0.3.0** — `rotate_credentials` and `list_credentials` tools added |
+| GAP-7 | LOW | Missing `pg_stat_replication` and `pg_stat_wal` monitoring queries | **Fixed in v0.3.0** — `replication_status` and `wal_statistics` tools added |
+| GAP-8 | MEDIUM | SQL/tool governance only wired to query tools — branch, compute, and sync tools bypass governance checks | **Fixed in v0.3.0** — governance enforced on all tool categories |
+| GAP-9 | HIGH | `get_connection_string` returns credentials in plaintext response — should redact or use short-lived tokens | **Fixed in v0.3.0** — passwords redacted by default, `show_password=true` opt-in |
+| GAP-10 | LOW | No WAL-based CDC (`wal2delta`) monitoring integration | **Fixed in v0.3.0** — `cdc_monitor` tool added |
+| GAP-11 | LOW | No project-level CRUD (create/delete projects via API) | **Fixed in v0.3.0** — `create_project` and `delete_project` tools added |
+| GAP-12 | LOW | No Lakehouse Sync status polling via REST API | **Fixed in v0.3.0** — `get_synced_table_status` tool provides sync status polling |
 
 Full gap analysis with recommendations: [Confluence — Lakebase MCP Server](https://databricks.atlassian.net/wiki/spaces/FE/pages/6179390187)
 

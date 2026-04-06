@@ -72,5 +72,5 @@ Steps:
 
 Rules:
 - Each CU = 2 GB RAM + proportional CPU
-- Max autoscaling spread: 8 CU (e.g., min=2, max=10)
+- Max autoscaling spread: 16 CU (e.g., min=2, max=18)
 - Scale-to-zero wake-up: ~hundreds of milliseconds"""
