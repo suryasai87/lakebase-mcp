@@ -1,5 +1,11 @@
-command: ['python', '-m', 'server.main']
+command:
+  - python
+  - -m
+  - server.main
 env:
+  # Databricks Apps proxy forwards to this port — MUST be 8000
+  - name: APP_PORT
+    value: "8000"
   # Lakebase connection (primary)
   - name: LAKEBASE_HOST
     value: "ep-hidden-haze-d2v9brhq.database.us-east-1.cloud.databricks.com"

@@ -8,3 +8,5 @@ command:
 env:
   - name: APP_PORT
     value: "8000"
+  - name: CORS_ORIGINS
+    value: "http://localhost:3000,http://localhost:8000,https://*.databricksapps.com"

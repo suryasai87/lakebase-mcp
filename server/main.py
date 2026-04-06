@@ -7,6 +7,8 @@ import os
 import logging
 from contextlib import asynccontextmanager
 from mcp.server.fastmcp import FastMCP
+from starlette.responses import JSONResponse
+from starlette.routing import Route
 from server.config import config
 from server.db import pool
 from server.governance.policy import build_governance_policy
@@ -151,8 +153,23 @@ def _apply_tool_governance(mcp_instance: FastMCP):
 _apply_tool_governance(mcp)
 
 
+# ---------------------------------------------------------------------------
+# Health endpoint — Databricks Apps proxy checks this to confirm the app is up.
+# Without a 200 response on /, the proxy returns 502 "App Not Available".
+# ---------------------------------------------------------------------------
+_port = int(os.environ.get("APP_PORT", "8000"))
+
+
+async def _health(request):
+    return JSONResponse({"status": "ok", "service": "lakebase-mcp"})
+
+
 def main():
     import argparse
+    import uvicorn
+    from starlette.applications import Starlette
+    from starlette.middleware import Middleware
+    from starlette.middleware.cors import CORSMiddleware as StarletteCORS
 
     parser = argparse.ArgumentParser(description="Lakebase MCP Server")
     parser.add_argument(
@@ -162,7 +179,39 @@ def main():
         help="MCP transport protocol (default: streamable-http)",
     )
     args = parser.parse_args()
-    mcp.run(transport=args.transport)
+
+    if args.transport == "stdio":
+        mcp.run(transport="stdio")
+        return
+
+    # For HTTP transport: build a Starlette app that includes health routes
+    # alongside the MCP streamable-http endpoint.
+    try:
+        mcp_app = mcp.streamable_http_app()
+    except AttributeError:
+        # Fallback for older FastMCP versions: run directly
+        logger.warning("FastMCP.streamable_http_app() not available, using mcp.run()")
+        mcp.run(transport="streamable-http")
+        return
+
+    app = Starlette(
+        routes=[
+            Route("/", _health),
+            Route("/health", _health),
+        ],
+        middleware=[
+            Middleware(
+                StarletteCORS,
+                allow_origins=["*"],
+                allow_methods=["*"],
+                allow_headers=["*"],
+            ),
+        ],
+    )
+    # Mount the MCP app at /mcp (FastMCP's default path)
+    app.mount("/mcp", mcp_app)
+
+    uvicorn.run(app, host="0.0.0.0", port=_port)
 
 
 if __name__ == "__main__":

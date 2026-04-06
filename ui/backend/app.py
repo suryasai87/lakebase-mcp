@@ -1,14 +1,36 @@
 """Lakebase MCP UI — FastAPI backend serving React SPA + metadata API."""
+import os
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from ui.backend.routers.metadata import router as metadata_router
 
 app = FastAPI(title="Lakebase MCP UI", version="1.0.0")
+
+# CORS — allow the Databricks Apps proxy and local dev origins
+_cors_origins = os.environ.get(
+    "CORS_ORIGINS",
+    "http://localhost:3000,http://localhost:8000",
+).split(",")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.include_router(metadata_router, prefix="/api")
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok", "service": "lakebase-mcp-ui"}
+
 
 STATIC_DIR = Path(__file__).parent / "static"
 
