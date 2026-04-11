@@ -72,32 +72,20 @@ class LakebasePool:
             await self._replica_pool.close()
             logger.info("Lakebase replica pool closed")
 
-    @asynccontextmanager
-    async def connection(
-        self, prefer_replica: bool = False
-    ) -> AsyncGenerator[psycopg.AsyncConnection, None]:
-        """Get a connection with scale-to-zero retry logic.
+    async def _acquire_connection(
+        self, target_pool: AsyncConnectionPool
+    ) -> psycopg.AsyncConnection:
+        """Acquire a connection with scale-to-zero retry logic.
 
-        If the Lakebase compute is suspended (scale-to-zero), the first
-        connection attempt will fail. This method retries with exponential
-        backoff to allow the compute to wake up (~hundreds of milliseconds).
-
-        Args:
-            prefer_replica: If True and replica pool is available, use replica.
+        Retries only on connection-level errors (S2Z wake-up). Once a
+        connection is acquired, it is returned directly — query errors
+        during usage are NOT retried.
         """
-        target_pool = self._primary_pool
-        if prefer_replica and self._replica_pool:
-            target_pool = self._replica_pool
-
-        if not target_pool:
-            raise RuntimeError("Pool not initialized. Call initialize() first.")
-
         last_error = None
         for attempt in range(config.scale_to_zero_retry_attempts):
             try:
-                async with target_pool.connection() as conn:
-                    yield conn
-                    return
+                conn = await target_pool.getconn()
+                return conn
             except (
                 psycopg.OperationalError,
                 psycopg.errors.ConnectionException,
@@ -120,6 +108,44 @@ class LakebasePool:
             f"Lakebase compute may still be starting. Last error: {last_error}"
         )
 
+    @asynccontextmanager
+    async def connection(
+        self, prefer_replica: bool = False
+    ) -> AsyncGenerator[psycopg.AsyncConnection, None]:
+        """Get a connection with scale-to-zero retry logic.
+
+        If the Lakebase compute is suspended (scale-to-zero), the first
+        connection attempt will fail. This method retries with exponential
+        backoff to allow the compute to wake up (~hundreds of milliseconds).
+
+        Args:
+            prefer_replica: If True and replica pool is available, use replica.
+                            Falls back to primary if replica is unavailable.
+        """
+        target_pool = self._primary_pool
+        if prefer_replica and self._replica_pool:
+            target_pool = self._replica_pool
+
+        if not target_pool:
+            raise RuntimeError("Pool not initialized. Call initialize() first.")
+
+        # Acquire connection with S2Z retry — separated from usage so that
+        # query errors during yield are NOT caught by the retry loop.
+        try:
+            conn = await self._acquire_connection(target_pool)
+        except ConnectionError:
+            # If replica failed, fall back to primary before giving up
+            if prefer_replica and self._replica_pool and target_pool is self._replica_pool:
+                logger.warning("Replica unavailable, falling back to primary pool.")
+                conn = await self._acquire_connection(self._primary_pool)
+            else:
+                raise
+
+        try:
+            yield conn
+        finally:
+            await target_pool.putconn(conn)
+
     async def execute_query(
         self, sql: str, params: tuple = None, max_rows: int = None,
         tool_name: str = None,
@@ -129,7 +155,7 @@ class LakebasePool:
         tagged_sql = f"/* lakebase_mcp:{tool_name} */ {sql}" if tool_name else sql
         async with self.connection() as conn:
             async with conn.cursor() as cur:
-                await cur.execute(tagged_sql, params, prepare=True)
+                await cur.execute(tagged_sql, params)
                 if cur.description:
                     rows = await cur.fetchmany(effective_max)
                     return [dict(row) for row in rows]
