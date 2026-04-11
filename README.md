@@ -8,7 +8,7 @@ This server gives AI agents (Claude, GPT, Copilot, etc.) full control over Lakeb
 
 ## Key Capabilities
 
-- **46 tools** across 13 categories — query, schema, projects, branching, compute, migration, sync, synced tables, endpoints, monitoring, quality, feature store, UC governance
+- **49 tools** across 14 categories — query, schema, projects, branching, compute, migration, sync, synced tables, endpoints, monitoring, quality, query optimization, feature store, UC governance
 - **4 prompt templates** — guided workflows for exploration, migration, sync, and autoscaling tuning
 - **1 session resource** — `memo://insights` for accumulating observations during analysis
 - **Interactive UI dashboard** — 5-page React + FastAPI app with tool explorer, governance matrix, connection wizard, and pricing calculator
@@ -21,7 +21,7 @@ This server gives AI agents (Claude, GPT, Copilot, etc.) full control over Lakeb
 
 ---
 
-## Tool Reference (46 Tools)
+## Tool Reference (49 Tools)
 
 ### Query Tools (3)
 
@@ -116,6 +116,14 @@ This server gives AI agents (Claude, GPT, Copilot, etc.) full control over Lakeb
 | Tool | Description |
 |------|-------------|
 | `lakebase_profile_table` | Per-column statistics: null%, cardinality, min/max, mean, stddev (numeric), distinct counts. Configurable sample size (100–1M rows) |
+
+### Query Optimization Tools (3)
+
+| Tool | Description |
+|------|-------------|
+| `lakebase_list_slow_queries` | List slowest queries from `pg_stat_statements` ranked by total/mean time, calls, or rows. Shows call count, timing stats, rows per call, and shared buffer cache hit ratio. Requires `pg_stat_statements` extension |
+| `lakebase_index_usage` | Analyze index usage from `pg_stat_user_indexes` to find unused or underused indexes. Shows scan count, tuple reads, size, and flags non-primary/unique indexes with zero scans |
+| `lakebase_table_scan_stats` | Compare sequential vs index scan statistics from `pg_stat_user_tables`. Identifies tables with high seq scans and low index usage that are candidates for new indexes |
 
 ### Feature Store Tools (2)
 
@@ -271,10 +279,10 @@ The server classifies SQL using **sqlglot AST parsing** (not regex) to accuratel
 
 | Profile | Allowed Tool Categories |
 |---------|------------------------|
-| `read_only` | sql_query, schema_read, project_read, branch_read, compute_read, sync_read, synced_tables_read, endpoint_read, monitoring, quality, feature_read, insight |
+| `read_only` | sql_query, schema_read, project_read, branch_read, compute_read, sync_read, synced_tables_read, endpoint_read, monitoring, quality, query_optimization, feature_read, insight |
 | `analyst` | Same as read_only |
 | `developer` | read_only + branch_write, compute_write, migration, sync_write, synced_tables_write, endpoint_write |
-| `admin` | All 16 categories |
+| `admin` | All 17 categories |
 
 ### Quick Start Examples
 
@@ -379,8 +387,8 @@ A full-featured React + FastAPI web app for exploring, configuring, and estimati
 
 | Page | Path | Description |
 |------|------|-------------|
-| **Home** | `/` | Stats overview (46 tools, 16 categories, 4 profiles, 4 prompts), quick links |
-| **Tool Explorer** | `/tools` | Browse all 46 tools by category, search, filter, view parameters and annotations |
+| **Home** | `/` | Stats overview (49 tools, 17 categories, 4 profiles, 4 prompts), quick links |
+| **Tool Explorer** | `/tools` | Browse all 49 tools by category, search, filter, view parameters and annotations |
 | **Connect** | `/connect` | Connection wizard with config snippets for Claude Desktop, Claude Code, Python, curl |
 | **Governance** | `/governance` | Interactive access control matrices for SQL profiles and tool profiles |
 | **Pricing Calculator** | `/pricing` | Token cost estimator, compute/storage calculators, competitive comparison |
@@ -523,7 +531,7 @@ async with streamablehttp_client("http://localhost:8000/mcp") as (read, write, _
     async with ClientSession(read, write) as session:
         await session.initialize()
 
-        # List all 46 tools
+        # List all 49 tools
         tools = await session.list_tools()
 
         # Run a query
@@ -597,7 +605,7 @@ lakebase-mcp/
 │   ├── auth.py              # Databricks SDK auth (OBO + standard) + UC permissions
 │   ├── governance/
 │   │   ├── sql_guard.py     # sqlglot-based SQL statement classification (17 types)
-│   │   ├── tool_guard.py    # Per-tool access control (16 categories, 4 profiles)
+│   │   ├── tool_guard.py    # Per-tool access control (17 categories, 4 profiles)
 │   │   └── policy.py        # Unified policy engine (env vars + YAML)
 │   ├── tools/
 │   │   ├── query.py         # 3 tools: read, execute, explain
@@ -611,6 +619,7 @@ lakebase-mcp/
 │   │   ├── endpoints.py    # 4 tools: list, create, update, delete endpoints
 │   │   ├── monitoring.py   # 3 tools: replication status, WAL stats, CDC monitor
 │   │   ├── quality.py       # 1 tool: profile table
+│   │   ├── query_optimization.py # 3 tools: slow queries, index usage, table scan stats
 │   │   ├── feature_store.py # 2 tools: lookup, list feature tables
 │   │   └── uc_governance.py # 4 tools: UC permissions, access check, governance summary, catalog grants
 │   ├── resources/
@@ -654,7 +663,7 @@ lakebase-mcp/
 ├── app.yaml                 # Databricks App configuration (MCP server)
 ├── pyproject.toml           # Project metadata (v0.2.0)
 ├── requirements.txt         # Pip-compatible requirements (includes sqlglot for SQL governance)
-└── TESTING_SCENARIOS.md     # Comprehensive test scenarios for all 46 tools
+└── TESTING_SCENARIOS.md     # Comprehensive test scenarios for all 49 tools
 ```
 
 ---

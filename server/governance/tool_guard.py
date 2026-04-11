@@ -58,6 +58,11 @@ TOOL_CATEGORIES: dict[str, list[str]] = {
     "quality": [
         "lakebase_profile_table",
     ],
+    "query_optimization": [
+        "lakebase_list_slow_queries",
+        "lakebase_index_usage",
+        "lakebase_table_scan_stats",
+    ],
     "feature_read": [
         "lakebase_lookup_features",
         "lakebase_list_feature_tables",
@@ -83,6 +88,7 @@ TOOL_PROFILES: dict[str, list[str]] = {
         "compute_read",
         "sync_read",
         "quality",
+        "query_optimization",
         "feature_read",
         "insight",
         "uc_governance",  # Always allow permission introspection
@@ -95,6 +101,7 @@ TOOL_PROFILES: dict[str, list[str]] = {
         "compute_read",
         "sync_read",
         "quality",
+        "query_optimization",
         "feature_read",
         "insight",
         "uc_governance",
@@ -111,6 +118,7 @@ TOOL_PROFILES: dict[str, list[str]] = {
         "sync_read",
         "sync_write",
         "quality",
+        "query_optimization",
         "feature_read",
         "insight",
         "uc_governance",
