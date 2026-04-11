@@ -1,5 +1,6 @@
 """Online Feature Store tools for Lakebase."""
 import json
+from psycopg import sql as psysql
 from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List
 from mcp.server.fastmcp import FastMCP
@@ -52,13 +53,25 @@ def register_feature_store_tools(mcp: FastMCP):
             parts = params.feature_table.split(".")
             schema = parts[0] if len(parts) > 1 else "features"
             table = parts[-1]
-            cols = ", ".join(params.features) if params.features else "*"
-            conditions = " AND ".join(
-                [f"{k} = %s" for k in params.entity_keys.keys()]
+            qualified_table = psysql.SQL("{}.{}").format(
+                psysql.Identifier(schema), psysql.Identifier(table)
+            )
+            if params.features:
+                cols = psysql.SQL(", ").join(
+                    psysql.Identifier(f) for f in params.features
+                )
+            else:
+                cols = psysql.SQL("*")
+            conditions = psysql.SQL(" AND ").join(
+                psysql.SQL("{} = %s").format(psysql.Identifier(k))
+                for k in params.entity_keys.keys()
             )
             values = tuple(params.entity_keys.values())
+            query = psysql.SQL("SELECT {} FROM {} WHERE {}").format(
+                cols, qualified_table, conditions
+            )
             rows = await pool.execute_readonly(
-                f"SELECT {cols} FROM {schema}.{table} WHERE {conditions}",
+                query.as_string(None),
                 values,
             )
             return json.dumps(

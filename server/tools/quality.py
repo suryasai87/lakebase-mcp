@@ -1,5 +1,6 @@
 """Data quality and profiling tools — inspired by Teradata MCP's EDA capabilities."""
 import json
+from psycopg import sql
 from pydantic import BaseModel, Field, ConfigDict
 from mcp.server.fastmcp import FastMCP
 from server.db import pool
@@ -53,8 +54,15 @@ def register_quality_tools(mcp: FastMCP):
                 (schema, table),
             )
             profile = {"table": params.table_name, "columns": []}
+            schema_id = sql.Identifier(schema)
+            table_id = sql.Identifier(table)
+            qualified_table = sql.SQL("{}.{}").format(schema_id, table_id)
+
+            count_query = sql.SQL("SELECT COUNT(*) as cnt FROM {}").format(
+                qualified_table
+            )
             count_result = await pool.execute_readonly(
-                f"SELECT COUNT(*) as cnt FROM {schema}.{table}"
+                count_query.as_string(None)
             )
             total_rows = count_result[0]["cnt"] if count_result else 0
             profile["total_rows"] = total_rows
@@ -63,17 +71,22 @@ def register_quality_tools(mcp: FastMCP):
                 col_name = col["column_name"]
                 col_type = col["data_type"]
                 stats = {"column": col_name, "data_type": col_type}
+                col_id = sql.Identifier(col_name)
+                null_query = sql.SQL(
+                    "SELECT COUNT(*) FILTER (WHERE {col} IS NULL) as nulls, "
+                    "COUNT(DISTINCT {col}) as distinct_count "
+                    "FROM (SELECT {col} FROM {tbl} LIMIT %s) sub"
+                ).format(col=col_id, tbl=qualified_table)
                 null_result = await pool.execute_readonly(
-                    f"SELECT COUNT(*) FILTER (WHERE {col_name} IS NULL) as nulls, "
-                    f"COUNT(DISTINCT {col_name}) as distinct_count "
-                    f"FROM (SELECT {col_name} FROM {schema}.{table} LIMIT %s) sub",
+                    null_query.as_string(None),
                     (params.sample_size,),
                 )
                 if null_result:
                     stats["null_count"] = null_result[0]["nulls"]
                     stats["distinct_count"] = null_result[0]["distinct_count"]
+                    actual_rows = min(params.sample_size, total_rows) or 1
                     stats["null_pct"] = round(
-                        null_result[0]["nulls"] / max(params.sample_size, 1) * 100, 2
+                        null_result[0]["nulls"] / actual_rows * 100, 2
                     )
                 if col_type in (
                     "integer",
@@ -83,12 +96,15 @@ def register_quality_tools(mcp: FastMCP):
                     "double precision",
                     "smallint",
                 ):
+                    num_query = sql.SQL(
+                        "SELECT MIN({col})::text as min_val, "
+                        "MAX({col})::text as max_val, "
+                        "AVG({col})::numeric(20,4)::text as avg_val, "
+                        "STDDEV({col})::numeric(20,4)::text as stddev_val "
+                        "FROM (SELECT {col} FROM {tbl} LIMIT %s) sub"
+                    ).format(col=col_id, tbl=qualified_table)
                     num_result = await pool.execute_readonly(
-                        f"SELECT MIN({col_name})::text as min_val, "
-                        f"MAX({col_name})::text as max_val, "
-                        f"AVG({col_name})::numeric(20,4)::text as avg_val, "
-                        f"STDDEV({col_name})::numeric(20,4)::text as stddev_val "
-                        f"FROM (SELECT {col_name} FROM {schema}.{table} LIMIT %s) sub",
+                        num_query.as_string(None),
                         (params.sample_size,),
                     )
                     if num_result:

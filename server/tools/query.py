@@ -141,6 +141,22 @@ def register_query_tools(mcp: FastMCP, governance: GovernancePolicy):
         (note: this executes the query).
         """
         try:
+            # Governance check on the inner SQL to prevent executing
+            # unallowed statements via EXPLAIN ANALYZE
+            allowed, error_msg = governance.check_sql(params.sql)
+            if not allowed:
+                return f"Error: EXPLAIN target query not allowed: {error_msg}"
+
+            # EXPLAIN ANALYZE actually executes the query, so refuse it
+            # for write statements — they would mutate data.
+            if params.analyze and governance.sql_governor.is_write(params.sql):
+                return (
+                    "Error: EXPLAIN ANALYZE is not allowed on write statements "
+                    "(INSERT, UPDATE, DELETE, etc.) because it executes the query. "
+                    "Use analyze=false for a plan estimate, or use "
+                    "lakebase_execute_query to run the write directly."
+                )
+
             explain_cmd = "EXPLAIN (FORMAT JSON, VERBOSE"
             if params.analyze:
                 explain_cmd += ", ANALYZE, BUFFERS"
