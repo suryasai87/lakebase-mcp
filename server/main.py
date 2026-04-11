@@ -103,6 +103,7 @@ from server.tools.monitoring import register_monitoring_tools
 from server.tools.quality import register_quality_tools
 from server.tools.feature_store import register_feature_store_tools
 from server.tools.uc_governance import register_uc_governance_tools
+from server.tools.query_optimization import register_query_optimization_tools
 from server.resources.insights import register_insight_resources
 from server.prompts.templates import register_prompts
 
@@ -119,6 +120,7 @@ register_monitoring_tools(mcp)
 register_quality_tools(mcp)
 register_feature_store_tools(mcp)
 register_uc_governance_tools(mcp)       # UC permissions & governance tools
+register_query_optimization_tools(mcp)  # Slow query analysis & index usage
 register_insight_resources(mcp)
 register_prompts(mcp)
 
