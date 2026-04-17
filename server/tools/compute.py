@@ -79,6 +79,19 @@ class CreateReadReplicaInput(BaseModel):
     )
 
 
+class StopComputeInput(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+    project_name: str = Field(..., description="Lakebase project name")
+    branch_name: str = Field(default="production", description="Branch name")
+    stopped: bool = Field(
+        ...,
+        description=(
+            "True = stop the compute now; False = clear the stop flag and let "
+            "the next query auto-resume it."
+        ),
+    )
+
+
 def register_compute_tools(mcp: FastMCP, governance: GovernancePolicy = None):
 
     @mcp.tool(
@@ -390,6 +403,58 @@ def register_compute_tools(mcp: FastMCP, governance: GovernancePolicy = None):
                         "Read replica is being created. It shares storage with "
                         "the primary compute (no data duplication). "
                         "Use lakebase_get_compute_status to check progress."
+                    ),
+                },
+                indent=2,
+            )
+        except Exception as e:
+            return handle_error(e)
+
+    @mcp.tool(
+        name="lakebase_stop_compute",
+        annotations={
+            "title": "Stop Compute (Manual Pause)",
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
+    )
+    async def lakebase_stop_compute(params: StopComputeInput) -> str:
+        """Explicitly stop (or unstop) a Lakebase branch compute.
+
+        This is distinct from scale-to-zero: a stopped compute will NOT auto-resume
+        on incoming queries — connections fail until `stopped=False` is set. Use for:
+        - Long maintenance windows where you want to block traffic
+        - Cost control on dev/test branches that should stay offline
+        - Forcing quiescence before a destructive operation
+
+        For automatic cost savings that still auto-resume on query, use
+        `lakebase_configure_scale_to_zero` instead.
+        """
+        if governance:
+            allowed, error_msg = governance.check_tool_access("lakebase_stop_compute")
+            if not allowed:
+                return f"Error: {error_msg}"
+        try:
+            auth = LakebaseAuth()
+            ws = auth.workspace_client
+            ws.api_client.do(
+                "PATCH",
+                f"/api/2.0/lakebase/projects/{params.project_name}"
+                f"/branches/{params.branch_name}/computes/primary",
+                body={"stopped": params.stopped},
+            )
+            return json.dumps(
+                {
+                    "status": "stopped" if params.stopped else "resumable",
+                    "project": params.project_name,
+                    "branch": params.branch_name,
+                    "message": (
+                        "Compute stopped. It will NOT auto-resume on query — "
+                        "call this tool again with stopped=False to clear the flag."
+                        if params.stopped
+                        else "Stop flag cleared. Compute will auto-resume on next query."
                     ),
                 },
                 indent=2,
