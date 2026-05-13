@@ -39,6 +39,26 @@ class DeleteBranchInput(BaseModel):
     )
 
 
+class CreatePitrBranchInput(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+    project_name: str = Field(..., description="Lakebase project name")
+    branch_name: str = Field(
+        ...,
+        description="Name for the new recovery branch (e.g., 'recovery-2026-04-17')",
+    )
+    timestamp_utc: str = Field(
+        ...,
+        description=(
+            "UTC timestamp (ISO 8601, e.g., '2026-04-17T14:30:00Z') to restore to. "
+            "Must fall within the project's PITR retention window (0–30 days)."
+        ),
+    )
+    source_branch: str = Field(
+        default="production",
+        description="Branch whose history to restore from. Defaults to production.",
+    )
+
+
 def register_branching_tools(mcp: FastMCP, governance: GovernancePolicy = None):
 
     @mcp.tool(
@@ -144,5 +164,67 @@ def register_branching_tools(mcp: FastMCP, governance: GovernancePolicy = None):
                 f"/api/2.0/lakebase/projects/{params.project_name}/branches/{params.branch_name}",
             )
             return f"Branch '{params.branch_name}' deleted from project '{params.project_name}'."
+        except Exception as e:
+            return handle_error(e)
+
+    @mcp.tool(
+        name="lakebase_create_pitr_branch",
+        annotations={
+            "title": "Create Point-in-Time Recovery Branch",
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": False,
+            "openWorldHint": False,
+        },
+    )
+    async def lakebase_create_pitr_branch(params: CreatePitrBranchInput) -> str:
+        """Create a branch restored to a specific point in time (PITR).
+
+        Forks the source branch's storage at `timestamp_utc` into a new branch —
+        no WAL replay, no downtime on the source. The timestamp must be within the
+        project's retention window (0–30 days, configured at project level).
+
+        Typical recovery workflow:
+        1. Call this tool with the timestamp just BEFORE the bad change.
+        2. Inspect / query the recovery branch to confirm state is correct.
+        3. Either repoint traffic via `lakebase_update_endpoint`, or copy data back
+           to production, then `lakebase_delete_branch` the recovery branch.
+
+        The new branch has its own compute (autoscaling defaults apply).
+        """
+        if governance:
+            allowed, error_msg = governance.check_tool_access("lakebase_create_pitr_branch")
+            if not allowed:
+                return f"Error: {error_msg}"
+        try:
+            auth = LakebaseAuth()
+            ws = auth.workspace_client
+            result = ws.api_client.do(
+                "POST",
+                f"/api/2.0/lakebase/projects/{params.project_name}/branches",
+                body={
+                    "branch_name": params.branch_name,
+                    "parent_branch": params.source_branch,
+                    "pitr_timestamp_utc": params.timestamp_utc,
+                },
+            )
+            return json.dumps(
+                {
+                    "status": "creating",
+                    "branch": params.branch_name,
+                    "project": params.project_name,
+                    "source_branch": params.source_branch,
+                    "restored_to": params.timestamp_utc,
+                    "operation": (result or {}).get("operation_id"),
+                    "message": (
+                        f"Recovery branch '{params.branch_name}' is being created "
+                        f"from '{params.source_branch}' at {params.timestamp_utc}. "
+                        f"Use lakebase_get_operation_status to poll, then "
+                        f"lakebase_get_connection_string to connect."
+                    ),
+                },
+                indent=2,
+                default=str,
+            )
         except Exception as e:
             return handle_error(e)

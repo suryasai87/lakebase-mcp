@@ -27,6 +27,7 @@ TOOL_CATEGORIES: dict[str, list[str]] = {
         "lakebase_list_projects",
         "lakebase_describe_project",
         "lakebase_get_connection_string",
+        "lakebase_get_operation_status",
     ],
     "branch_read": [
         "lakebase_list_branches",
@@ -34,6 +35,7 @@ TOOL_CATEGORIES: dict[str, list[str]] = {
     "branch_write": [
         "lakebase_create_branch",
         "lakebase_delete_branch",
+        "lakebase_create_pitr_branch",
     ],
     "compute_read": [
         "lakebase_get_compute_status",
@@ -44,6 +46,7 @@ TOOL_CATEGORIES: dict[str, list[str]] = {
         "lakebase_configure_scale_to_zero",
         "lakebase_restart_compute",
         "lakebase_create_read_replica",
+        "lakebase_stop_compute",
     ],
     "migration": [
         "lakebase_prepare_migration",

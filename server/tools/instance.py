@@ -78,6 +78,20 @@ class DeleteProjectInput(BaseModel):
     )
 
 
+class GetOperationStatusInput(BaseModel):
+    """Poll the status of a long-running Lakebase operation."""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+    project_name: str = Field(..., description="Lakebase project name")
+    operation_id: str = Field(
+        ...,
+        description=(
+            "Operation ID returned by async tools (e.g., create_branch, "
+            "create_pitr_branch, create_read_replica, restart_compute)."
+        ),
+    )
+
+
 def register_instance_tools(mcp: FastMCP):
 
     @mcp.tool(
@@ -314,5 +328,37 @@ def register_instance_tools(mcp: FastMCP):
                 indent=2,
                 default=str,
             )
+        except Exception as e:
+            return handle_error(e)
+
+    @mcp.tool(
+        name="lakebase_get_operation_status",
+        annotations={
+            "title": "Get Operation Status",
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
+    )
+    async def lakebase_get_operation_status(params: GetOperationStatusInput) -> str:
+        """Poll a long-running Lakebase operation by its ID.
+
+        Branch creation, PITR restore, read-replica creation, and compute restarts
+        all return asynchronously via an `operation_id`. Use this tool to check
+        whether the operation is still running, completed, or failed — and to get
+        the resulting resource name (e.g., the new branch/compute) when ready.
+
+        Typical states: PENDING, RUNNING, SUCCEEDED, FAILED, CANCELLED.
+        """
+        try:
+            auth = LakebaseAuth()
+            ws = auth.workspace_client
+            result = ws.api_client.do(
+                "GET",
+                f"/api/2.0/lakebase/projects/{params.project_name}"
+                f"/operations/{params.operation_id}",
+            )
+            return json.dumps(result, indent=2, default=str)
         except Exception as e:
             return handle_error(e)

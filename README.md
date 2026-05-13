@@ -8,7 +8,7 @@ This server gives AI agents (Claude, GPT, Copilot, etc.) full control over Lakeb
 
 ## Key Capabilities
 
-- **46 tools** across 13 categories — query, schema, projects, branching, compute, migration, sync, synced tables, endpoints, monitoring, quality, feature store, UC governance
+- **49 tools** across 13 categories — query, schema, projects, branching, compute, migration, sync, synced tables, endpoints, monitoring, quality, feature store, UC governance
 - **4 prompt templates** — guided workflows for exploration, migration, sync, and autoscaling tuning
 - **1 session resource** — `memo://insights` for accumulating observations during analysis
 - **Interactive UI dashboard** — 5-page React + FastAPI app with tool explorer, governance matrix, connection wizard, and pricing calculator
@@ -21,7 +21,7 @@ This server gives AI agents (Claude, GPT, Copilot, etc.) full control over Lakeb
 
 ---
 
-## Tool Reference (46 Tools)
+## Tool Reference (49 Tools)
 
 ### Query Tools (3)
 
@@ -40,7 +40,7 @@ This server gives AI agents (Claude, GPT, Copilot, etc.) full control over Lakeb
 | `lakebase_describe_table` | Full table schema: columns, types, nullability, defaults, length/precision, indexes with definitions |
 | `lakebase_object_tree` | Hierarchical JSON tree: schemas -> tables -> columns. Includes TABLE, VIEW, MATERIALIZED VIEW |
 
-### Project Management Tools (7)
+### Project Management Tools (8)
 
 | Tool | Description |
 |------|-------------|
@@ -51,16 +51,18 @@ This server gives AI agents (Claude, GPT, Copilot, etc.) full control over Lakeb
 | `lakebase_delete_project` | Delete a Lakebase project (irreversible). Requires confirmation parameter to prevent accidental deletion |
 | `lakebase_rotate_credentials` | Rotate PostgreSQL credentials for a Lakebase project. Generates new short-lived tokens via credential vending |
 | `lakebase_list_credentials` | List active credentials/sessions for a Lakebase project. Shows credential age and expiration |
+| `lakebase_get_operation_status` | Poll a long-running operation (branch create, PITR restore, replica create, restart) by `operation_id`. Returns state + resulting resource |
 
-### Branching Tools (3)
+### Branching Tools (4)
 
 | Tool | Description |
 |------|-------------|
 | `lakebase_create_branch` | Create a copy-on-write branch (instant, shared storage). Optional parent branch selection |
 | `lakebase_list_branches` | List all branches with creation time, parent, compute status, CU allocation |
 | `lakebase_delete_branch` | Delete a branch (irreversible). **Cannot delete production/main** — enforced server-side |
+| `lakebase_create_pitr_branch` | Create a point-in-time recovery branch from `source_branch` at `timestamp_utc` (ISO 8601). No WAL replay, no downtime on the source. Must be within the project's PITR retention window (0–30 days) |
 
-### Compute Management Tools (6)
+### Compute Management Tools (7)
 
 | Tool | Description |
 |------|-------------|
@@ -70,6 +72,7 @@ This server gives AI agents (Claude, GPT, Copilot, etc.) full control over Lakeb
 | `lakebase_get_compute_metrics` | Time-series: CPU%, memory%, working set, connections, state transitions. Lookback: 5–1440 minutes |
 | `lakebase_restart_compute` | Restart compute (interrupts active connections). For config changes, performance issues, or extension updates |
 | `lakebase_create_read_replica` | Create read replica with independent autoscaling. Shares storage (no data duplication) |
+| `lakebase_stop_compute` | Explicitly stop (or unstop) a compute. Unlike scale-to-zero, a stopped compute will NOT auto-resume on query — use for maintenance windows or cost control |
 
 ### Migration Tools (2)
 
