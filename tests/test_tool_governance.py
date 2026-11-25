@@ -1,4 +1,4 @@
-"""Test Tool-Level Access Control — all 31 tools across all 4 profiles.
+"""Test Tool-Level Access Control — all 57 tools across all 4 profiles.
 
 Tests tool categories, profile definitions, ToolAccessPolicy, allow/deny lists,
 category overrides, and individual tool overrides.
@@ -12,7 +12,7 @@ from server.governance.tool_guard import (
 )
 
 
-# ── All 31 Tools ──────────────────────────────────────────────────────
+# ── All 57 Tools ──────────────────────────────────────────────────────
 
 ALL_TOOLS = sorted(
     tool for tools in TOOL_CATEGORIES.values() for tool in tools
@@ -24,10 +24,10 @@ class TestToolCategories:
     """Verify category definitions are complete and correct."""
 
     def test_total_categories(self):
-        assert len(TOOL_CATEGORIES) == 14
+        assert len(TOOL_CATEGORIES) == 25
 
     def test_total_tools(self):
-        assert len(ALL_TOOLS) == 31
+        assert len(ALL_TOOLS) == 57
 
     def test_no_duplicate_tools(self):
         all_tools_flat = [t for tools in TOOL_CATEGORIES.values() for t in tools]
@@ -110,6 +110,74 @@ class TestToolCategories:
             "lakebase_list_catalog_grants",
         }
 
+    def test_data_api_read_category(self):
+        assert set(TOOL_CATEGORIES["data_api_read"]) == {
+            "lakebase_data_api_get",
+            "lakebase_data_api_schema",
+            "lakebase_data_api_status",
+        }
+
+    def test_data_api_write_category(self):
+        assert set(TOOL_CATEGORIES["data_api_write"]) == {
+            "lakebase_data_api_insert",
+            "lakebase_data_api_update",
+            "lakebase_data_api_delete",
+            "lakebase_data_api_configure",
+        }
+
+    def test_role_read_category(self):
+        assert set(TOOL_CATEGORIES["role_read"]) == {
+            "lakebase_list_db_roles",
+            "lakebase_generate_credential",
+        }
+
+    def test_role_write_category(self):
+        assert set(TOOL_CATEGORIES["role_write"]) == {
+            "lakebase_create_db_role",
+            "lakebase_setup_data_api_access",
+        }
+
+    def test_monitoring_category(self):
+        assert set(TOOL_CATEGORIES["monitoring"]) == {
+            "lakebase_replication_status",
+            "lakebase_wal_statistics",
+            "lakebase_cdc_monitor",
+        }
+
+    def test_synced_tables_read_category(self):
+        assert set(TOOL_CATEGORIES["synced_tables_read"]) == {
+            "lakebase_list_synced_tables",
+            "lakebase_get_sync_status",
+        }
+
+    def test_synced_tables_write_category(self):
+        assert set(TOOL_CATEGORIES["synced_tables_write"]) == {
+            "lakebase_create_synced_table",
+            "lakebase_delete_synced_table",
+        }
+
+    def test_endpoint_read_category(self):
+        assert TOOL_CATEGORIES["endpoint_read"] == ["lakebase_list_endpoints"]
+
+    def test_endpoint_write_category(self):
+        assert set(TOOL_CATEGORIES["endpoint_write"]) == {
+            "lakebase_create_endpoint",
+            "lakebase_update_endpoint",
+            "lakebase_delete_endpoint",
+        }
+
+    def test_credential_management_category(self):
+        assert set(TOOL_CATEGORIES["credential_management"]) == {
+            "lakebase_rotate_credentials",
+            "lakebase_list_credentials",
+        }
+
+    def test_project_write_category(self):
+        assert set(TOOL_CATEGORIES["project_write"]) == {
+            "lakebase_create_project",
+            "lakebase_delete_project",
+        }
+
 
 # ── Profile Definitions ──────────────────────────────────────────────
 
@@ -119,7 +187,8 @@ class TestToolProfiles:
     def test_read_only_categories(self):
         expected = [
             "sql_query", "schema_read", "project_read", "branch_read",
-            "compute_read", "sync_read", "quality", "feature_read",
+            "compute_read", "sync_read", "synced_tables_read", "endpoint_read",
+            "data_api_read", "role_read", "monitoring", "quality", "feature_read",
             "insight", "uc_governance",
         ]
         assert TOOL_PROFILES["read_only"] == expected
@@ -131,7 +200,9 @@ class TestToolProfiles:
         expected = [
             "sql_query", "schema_read", "project_read", "branch_read",
             "branch_write", "compute_read", "compute_write", "migration",
-            "sync_read", "sync_write", "quality", "feature_read",
+            "sync_read", "sync_write", "synced_tables_read", "synced_tables_write",
+            "endpoint_read", "endpoint_write", "data_api_read", "data_api_write",
+            "role_read", "role_write", "monitoring", "quality", "feature_read",
             "insight", "uc_governance",
         ]
         assert TOOL_PROFILES["developer"] == expected
@@ -309,6 +380,17 @@ class TestFullToolMatrixReadOnly:
         "lakebase_get_compute_status",
         "lakebase_get_compute_metrics",
         "lakebase_list_syncs",
+        "lakebase_list_synced_tables",
+        "lakebase_get_sync_status",
+        "lakebase_list_endpoints",
+        "lakebase_data_api_get",
+        "lakebase_data_api_schema",
+        "lakebase_data_api_status",
+        "lakebase_list_db_roles",
+        "lakebase_generate_credential",
+        "lakebase_replication_status",
+        "lakebase_wal_statistics",
+        "lakebase_cdc_monitor",
         "lakebase_profile_table",
         "lakebase_lookup_features",
         "lakebase_list_feature_tables",
@@ -330,6 +412,21 @@ class TestFullToolMatrixReadOnly:
         "lakebase_prepare_migration",
         "lakebase_complete_migration",
         "lakebase_create_sync",
+        "lakebase_create_synced_table",
+        "lakebase_delete_synced_table",
+        "lakebase_create_endpoint",
+        "lakebase_update_endpoint",
+        "lakebase_delete_endpoint",
+        "lakebase_data_api_insert",
+        "lakebase_data_api_update",
+        "lakebase_data_api_delete",
+        "lakebase_data_api_configure",
+        "lakebase_create_db_role",
+        "lakebase_setup_data_api_access",
+        "lakebase_rotate_credentials",
+        "lakebase_list_credentials",
+        "lakebase_create_project",
+        "lakebase_delete_project",
     ]
 
     @pytest.mark.parametrize("tool", ALLOWED)
@@ -341,7 +438,7 @@ class TestFullToolMatrixReadOnly:
         assert policy.is_tool_allowed(tool) is False, f"{tool} should be DENIED in read_only"
 
     def test_complete_coverage(self, policy):
-        """All 31 tools are covered in either ALLOWED or DENIED."""
+        """All 57 tools are covered in either ALLOWED or DENIED."""
         covered = set(self.ALLOWED + self.DENIED)
         assert covered == set(ALL_TOOLS), f"Missing tools: {set(ALL_TOOLS) - covered}"
 
@@ -353,12 +450,20 @@ class TestFullToolMatrixDeveloper:
     def policy(self):
         return resolve_tool_policy(profile="developer")
 
-    # All 31 tools should be allowed in developer
-    ALLOWED = ALL_TOOLS  # developer has all categories
+    # Admin-only tools that developers should NOT have
+    ADMIN_ONLY = [
+        "lakebase_create_project",
+        "lakebase_delete_project",
+        "lakebase_rotate_credentials",
+        "lakebase_list_credentials",
+    ]
 
     @pytest.mark.parametrize("tool", ALL_TOOLS)
-    def test_all_tools_allowed(self, policy, tool):
-        assert policy.is_tool_allowed(tool) is True, f"{tool} should be ALLOWED in developer"
+    def test_tools_access(self, policy, tool):
+        if tool in self.ADMIN_ONLY:
+            assert policy.is_tool_allowed(tool) is False, f"{tool} should be DENIED in developer (admin-only)"
+        else:
+            assert policy.is_tool_allowed(tool) is True, f"{tool} should be ALLOWED in developer"
 
 
 class TestFullToolMatrixAdmin:

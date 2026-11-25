@@ -75,4 +75,14 @@ def handle_error(e: Exception) -> str:
             "(scale-to-zero wake-up). Retry shortly or check compute status."
         )
 
+    # Data API HTTP errors
+    from server.data_api_client import DataAPIError
+    if isinstance(e, DataAPIError):
+        if e.status_code == 405 and e.error_code == "25006":
+            return (
+                "Error: Write operation rejected — this endpoint is a read replica. "
+                "Writes (INSERT, UPDATE, DELETE) must be sent to the primary endpoint."
+            )
+        return f"Error: Data API returned HTTP {e.status_code} — {e.detail}"
+
     return f"Error: {type(e).__name__} — {str(e)}"

@@ -97,5 +97,14 @@ class LakebaseConfig:
         default_factory=lambda: int(os.environ.get("LAKEBASE_POOL_MAX_IDLE", "60"))
     )
 
+    # --- Data API settings ---
+
+    data_api_base_url: str = field(
+        default_factory=lambda: os.environ.get("LAKEBASE_DATA_API_URL", "")
+    )
+    data_api_region: str = field(
+        default_factory=lambda: os.environ.get("LAKEBASE_DATA_API_REGION", "")
+    )
+
 
 config = LakebaseConfig()

@@ -10,7 +10,7 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 
-# Tool categories for bulk allow/deny — all 31 tools + 1 resource tool
+# Tool categories for bulk allow/deny — all tools + 1 resource tool
 TOOL_CATEGORIES: dict[str, list[str]] = {
     "sql_query": [
         "lakebase_execute_query",
@@ -71,6 +71,54 @@ TOOL_CATEGORIES: dict[str, list[str]] = {
         "lakebase_governance_summary",
         "lakebase_list_catalog_grants",
     ],
+    "synced_tables_read": [
+        "lakebase_list_synced_tables",
+        "lakebase_get_sync_status",
+    ],
+    "synced_tables_write": [
+        "lakebase_create_synced_table",
+        "lakebase_delete_synced_table",
+    ],
+    "endpoint_read": [
+        "lakebase_list_endpoints",
+    ],
+    "endpoint_write": [
+        "lakebase_create_endpoint",
+        "lakebase_update_endpoint",
+        "lakebase_delete_endpoint",
+    ],
+    "data_api_read": [
+        "lakebase_data_api_get",
+        "lakebase_data_api_schema",
+        "lakebase_data_api_status",
+    ],
+    "data_api_write": [
+        "lakebase_data_api_insert",
+        "lakebase_data_api_update",
+        "lakebase_data_api_delete",
+        "lakebase_data_api_configure",
+    ],
+    "role_read": [
+        "lakebase_list_db_roles",
+        "lakebase_generate_credential",
+    ],
+    "role_write": [
+        "lakebase_create_db_role",
+        "lakebase_setup_data_api_access",
+    ],
+    "monitoring": [
+        "lakebase_replication_status",
+        "lakebase_wal_statistics",
+        "lakebase_cdc_monitor",
+    ],
+    "credential_management": [
+        "lakebase_rotate_credentials",
+        "lakebase_list_credentials",
+    ],
+    "project_write": [
+        "lakebase_create_project",
+        "lakebase_delete_project",
+    ],
 }
 
 # Pre-built tool profiles (composable with SQL profiles)
@@ -82,6 +130,11 @@ TOOL_PROFILES: dict[str, list[str]] = {
         "branch_read",
         "compute_read",
         "sync_read",
+        "synced_tables_read",
+        "endpoint_read",
+        "data_api_read",
+        "role_read",
+        "monitoring",
         "quality",
         "feature_read",
         "insight",
@@ -94,6 +147,11 @@ TOOL_PROFILES: dict[str, list[str]] = {
         "branch_read",
         "compute_read",
         "sync_read",
+        "synced_tables_read",
+        "endpoint_read",
+        "data_api_read",
+        "role_read",
+        "monitoring",
         "quality",
         "feature_read",
         "insight",
@@ -110,6 +168,15 @@ TOOL_PROFILES: dict[str, list[str]] = {
         "migration",
         "sync_read",
         "sync_write",
+        "synced_tables_read",
+        "synced_tables_write",
+        "endpoint_read",
+        "endpoint_write",
+        "data_api_read",
+        "data_api_write",
+        "role_read",
+        "role_write",
+        "monitoring",
         "quality",
         "feature_read",
         "insight",

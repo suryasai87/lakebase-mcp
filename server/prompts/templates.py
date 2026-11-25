@@ -52,6 +52,49 @@ Steps:
 4. Call lakebase_create_sync
 5. Monitor with lakebase_list_syncs"""
 
+    @mcp.prompt("lakebase_data_api_setup")
+    async def data_api_setup() -> str:
+        """Guide for setting up and using the Lakebase Data API."""
+        return """You are setting up the Lakebase Data API for REST-based access to tables.
+
+The Data API provides a PostgREST-compatible REST interface to Lakebase tables,
+authenticated with Databricks OAuth tokens.
+
+Steps:
+1. **Check status**: Call lakebase_data_api_status to verify the Data API is enabled
+2. **Create roles**: Use lakebase_create_db_role for each identity (user/SP/group)
+   - For service principals: use the application UUID, not the display name
+   - Recommended: use a service principal, not the project owner
+3. **Grant access**: Call lakebase_setup_data_api_access to grant:
+   - Role to authenticator
+   - Schema USAGE
+   - Table privileges (SELECT, INSERT, UPDATE, DELETE)
+4. **Configure settings**: Use lakebase_data_api_configure to set:
+   - Exposed schemas (which schemas the API serves)
+   - Max rows per response (paginate beyond this)
+   - CORS origins (empty = allow all; list production domains)
+   - OpenAPI endpoint (for client generation)
+5. **Test access**: Use lakebase_data_api_get to query tables
+
+Filter syntax (PostgREST operators):
+  eq.value     — equals
+  gte.5        — greater than or equal
+  lte.100      — less than or equal
+  neq.draft    — not equal
+  like.*foo*   — pattern match
+  in.(a,b,c)   — in set
+
+Resource embedding (joins):
+  select=id,name,orders(id,total)  — embed related orders
+
+Pagination:
+  limit=10&offset=20  — page through results
+
+Read replicas: set use_replica=true to route reads to replicas (writes fail on replicas).
+
+RLS: enable Row Level Security on tables for per-user data isolation.
+  current_user returns the Databricks email in Lakebase."""
+
     @mcp.prompt("lakebase_autoscaling_tuning")
     async def autoscaling_tuning() -> str:
         """Guide for tuning Lakebase autoscaling and scale-to-zero settings."""

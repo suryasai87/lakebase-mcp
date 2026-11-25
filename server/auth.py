@@ -37,6 +37,34 @@ class LakebaseAuth:
             logger.error(f"Failed to get Lakebase credentials: {e}")
             raise
 
+    async def generate_database_credential(
+        self, project_name: str, branch_name: str = "production",
+        endpoint_name: str = "primary",
+    ) -> dict:
+        """Generate a short-lived OAuth token for Lakebase PostgreSQL access.
+
+        Returns a 1-hour token usable as the PG password or Data API Bearer token.
+        Token expiry is checked only at login; open connections stay alive.
+        """
+        try:
+            endpoint_path = (
+                f"projects/{project_name}/branches/{branch_name}"
+                f"/endpoints/{endpoint_name}"
+            )
+            result = self._ws.api_client.do(
+                "POST",
+                "/api/2.0/postgres/generate-database-credential",
+                body={"endpoint": endpoint_path},
+            )
+            return {
+                "token": result.get("token", ""),
+                "expire_time": result.get("expire_time", ""),
+                "endpoint": endpoint_path,
+            }
+        except Exception as e:
+            logger.error(f"Failed to generate database credential: {e}")
+            raise
+
     def check_uc_permission(
         self, catalog: str, schema: str, table: str = None
     ) -> bool:

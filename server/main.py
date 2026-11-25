@@ -1,7 +1,7 @@
 """Lakebase MCP Server — main entry point.
 
 Merged: base server + autoscaling compute tools + replica pool initialization.
-31 tools, 4 prompts, 1 resource, dual-layer governance, UC permissions.
+57 tools, 5 prompts, 1 resource, dual-layer governance, UC permissions, Data API.
 """
 import os
 import logging
@@ -103,6 +103,8 @@ from server.tools.monitoring import register_monitoring_tools
 from server.tools.quality import register_quality_tools
 from server.tools.feature_store import register_feature_store_tools
 from server.tools.uc_governance import register_uc_governance_tools
+from server.tools.data_api import register_data_api_tools
+from server.tools.roles import register_role_tools
 from server.resources.insights import register_insight_resources
 from server.prompts.templates import register_prompts
 
@@ -119,6 +121,8 @@ register_monitoring_tools(mcp)
 register_quality_tools(mcp)
 register_feature_store_tools(mcp)
 register_uc_governance_tools(mcp)       # UC permissions & governance tools
+register_data_api_tools(mcp, governance)    # Data API REST tools
+register_role_tools(mcp, governance)        # Role management & Data API access setup
 register_insight_resources(mcp)
 register_prompts(mcp)
 

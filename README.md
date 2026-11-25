@@ -2,14 +2,14 @@
 
 A production-ready [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server for **Databricks Lakebase** — the managed PostgreSQL service on Databricks with autoscaling, branching, and Unity Catalog governance.
 
-This server gives AI agents (Claude, GPT, Copilot, etc.) full control over Lakebase databases: querying, schema exploration, compute management, branching, migrations, Delta sync, data quality profiling, and feature serving — all through a standard MCP interface.
+This server gives AI agents (Claude, GPT, Copilot, etc.) full control over Lakebase databases: querying, schema exploration, compute management, branching, migrations, Delta sync, data quality profiling, feature serving, REST Data API, and role management — all through a standard MCP interface.
 
 ---
 
 ## Key Capabilities
 
-- **46 tools** across 13 categories — query, schema, projects, branching, compute, migration, sync, synced tables, endpoints, monitoring, quality, feature store, UC governance
-- **4 prompt templates** — guided workflows for exploration, migration, sync, and autoscaling tuning
+- **58 tools** across 16 categories — query, schema, projects, branching, compute, migration, sync, synced tables, endpoints, monitoring, quality, feature store, UC governance, Data API, roles, credentials
+- **5 prompt templates** — guided workflows for exploration, migration, sync, autoscaling tuning, and Data API setup
 - **1 session resource** — `memo://insights` for accumulating observations during analysis
 - **Interactive UI dashboard** — 5-page React + FastAPI app with tool explorer, governance matrix, connection wizard, and pricing calculator
 - **Autoscaling-aware** — exponential backoff retry for scale-to-zero, read replica routing, compute lifecycle management
@@ -21,7 +21,7 @@ This server gives AI agents (Claude, GPT, Copilot, etc.) full control over Lakeb
 
 ---
 
-## Tool Reference (46 Tools)
+## Tool Reference (58 Tools)
 
 ### Query Tools (3)
 
@@ -133,6 +133,27 @@ This server gives AI agents (Claude, GPT, Copilot, etc.) full control over Lakeb
 | `lakebase_governance_summary` | Combined view: MCP SQL governance + MCP tool governance + UC permissions. Recommends optimal profile |
 | `lakebase_list_catalog_grants` | List all grants on a catalog and its schemas. Shows which principals have what privileges |
 
+### Data API Tools (7)
+
+| Tool | Description |
+|------|-------------|
+| `lakebase_data_api_get` | Query rows via REST with PostgREST filtering (eq, gte, lte, neq, like, in), column selection, resource embedding, sorting, pagination, and read replica routing |
+| `lakebase_data_api_insert` | Insert rows via REST POST (single or bulk up to 1000 rows). Returns inserted rows with server-generated values |
+| `lakebase_data_api_update` | Update rows via REST PATCH with required filters to prevent full-table updates |
+| `lakebase_data_api_delete` | Delete rows via REST DELETE with required filters to prevent full-table deletes |
+| `lakebase_data_api_schema` | Fetch OpenAPI 3 schema for client generation (TypeScript, Python, Go) or Postman/Swagger import |
+| `lakebase_data_api_configure` | Configure Data API settings: exposed schemas, max rows, CORS origins, OpenAPI toggle, Server-Timing headers |
+| `lakebase_data_api_status` | Check Data API enablement, endpoint URL, configuration, and authenticator role status |
+
+### Role Management Tools (4)
+
+| Tool | Description |
+|------|-------------|
+| `lakebase_create_db_role` | Create OAuth-linked Postgres role for users, service principals, or groups via databricks_auth extension |
+| `lakebase_setup_data_api_access` | Grant authenticator role, schema USAGE, and table privileges for Data API access — full setup in one call |
+| `lakebase_generate_credential` | Generate a short-lived (1-hour) OAuth token for PostgreSQL or Data API access. Redacted by default |
+| `lakebase_list_db_roles` | List all Postgres roles with login capabilities and group memberships. Excludes system roles by default |
+
 ### Insights (1 tool + 1 resource)
 
 | Name | Type | Description |
@@ -142,7 +163,7 @@ This server gives AI agents (Claude, GPT, Copilot, etc.) full control over Lakeb
 
 ---
 
-## Prompt Templates (4)
+## Prompt Templates (5)
 
 Reusable prompt templates that guide agents through common multi-step workflows:
 
@@ -152,6 +173,7 @@ Reusable prompt templates that guide agents through common multi-step workflows:
 | `lakebase_safe_migration` | Branch-based schema migration | `prepare_migration` -> `read_query` (test) -> `explain_query` (validate) -> `complete_migration` |
 | `lakebase_setup_sync` | Delta <-> Lakebase synchronization | `create_sync` -> `list_syncs` |
 | `lakebase_autoscaling_tuning` | Monitor and tune compute autoscaling | `get_compute_status` -> `get_compute_metrics` -> `configure_autoscaling` -> `configure_scale_to_zero` -> `create_read_replica` |
+| `lakebase_data_api_setup` | Set up and use the REST Data API | `data_api_status` -> `create_db_role` -> `setup_data_api_access` -> `data_api_configure` -> `data_api_get` |
 
 **Usage in Claude Code:**
 ```
@@ -220,6 +242,65 @@ This appears in:
 
 ---
 
+## Data API (REST Interface)
+
+Lakebase v0.4.0 adds full support for the Databricks Lakebase Data API — a PostgREST-based REST interface that exposes tables as HTTP resources.
+
+### Why Data API?
+
+- **No PostgreSQL driver needed** — HTTP-native access from any language or platform
+- **PostgREST compatible** — use existing PostgREST client libraries
+- **OpenAPI schema** — auto-generate typed clients for TypeScript, Python, Go
+- **Built-in filtering** — eq, gte, lte, neq, like, in operators on any column
+- **Resource embedding** — join related tables in a single request
+- **Read replica routing** — lower latency for read-heavy workloads
+- **Row-Level Security** — per-user data isolation via `current_user`
+
+### Quick Start
+
+```bash
+# 1. Check if Data API is enabled
+> lakebase_data_api_status(project_name="my-project")
+
+# 2. Create a role for your service principal
+> lakebase_create_db_role(identity_name="8c01cfb1-...", identity_type="SERVICE_PRINCIPAL")
+
+# 3. Grant Data API access
+> lakebase_setup_data_api_access(identity_name="8c01cfb1-...", privileges=["SELECT", "INSERT", "UPDATE", "DELETE"])
+
+# 4. Query via REST
+> lakebase_data_api_get(project_name="my-project", table="clients", filters={"status": "eq.active"}, order="name.asc", limit=10)
+```
+
+### Data API URL Pattern
+
+```
+https://<endpoint-id>.database.<region>.cloud.databricks.com/api/2.0/workspace/<workspace-id>/rest/<database>/<schema>/<table>
+```
+
+### Filter Operators
+
+| Operator | Example | Description |
+|----------|---------|-------------|
+| `eq` | `?status=eq.active` | Equals |
+| `gte` | `?id=gte.2` | Greater than or equal |
+| `lte` | `?price=lte.100` | Less than or equal |
+| `neq` | `?status=neq.draft` | Not equal |
+| `like` | `?name=like.*Smith*` | Pattern match |
+| `in` | `?category=in.(a,b,c)` | In set |
+
+### Authentication
+
+Data API uses Databricks OAuth bearer tokens. Each request requires:
+1. A valid OAuth token (`Authorization: Bearer <token>`)
+2. A matching Postgres role created via `databricks_create_role`
+3. The role granted to `authenticator`
+4. Table-level privileges on the target schema
+
+Use `lakebase_generate_credential` to mint tokens, or `lakebase_setup_data_api_access` for the full role + permissions setup.
+
+---
+
 ## Safety Controls
 
 | Control | Details |
@@ -271,10 +352,10 @@ The server classifies SQL using **sqlglot AST parsing** (not regex) to accuratel
 
 | Profile | Allowed Tool Categories |
 |---------|------------------------|
-| `read_only` | sql_query, schema_read, project_read, branch_read, compute_read, sync_read, synced_tables_read, endpoint_read, monitoring, quality, feature_read, insight |
+| `read_only` | sql_query, schema_read, project_read, branch_read, compute_read, sync_read, synced_tables_read, endpoint_read, data_api_read, role_read, monitoring, quality, feature_read, insight, uc_governance |
 | `analyst` | Same as read_only |
-| `developer` | read_only + branch_write, compute_write, migration, sync_write, synced_tables_write, endpoint_write |
-| `admin` | All 16 categories |
+| `developer` | read_only + branch_write, compute_write, migration, sync_write, synced_tables_write, endpoint_write, data_api_write, role_write |
+| `admin` | All categories |
 
 ### Quick Start Examples
 
@@ -379,8 +460,8 @@ A full-featured React + FastAPI web app for exploring, configuring, and estimati
 
 | Page | Path | Description |
 |------|------|-------------|
-| **Home** | `/` | Stats overview (46 tools, 16 categories, 4 profiles, 4 prompts), quick links |
-| **Tool Explorer** | `/tools` | Browse all 46 tools by category, search, filter, view parameters and annotations |
+| **Home** | `/` | Stats overview (58 tools, 16 categories, 4 profiles, 5 prompts), quick links |
+| **Tool Explorer** | `/tools` | Browse all 58 tools by category, search, filter, view parameters and annotations |
 | **Connect** | `/connect` | Connection wizard with config snippets for Claude Desktop, Claude Code, Python, curl |
 | **Governance** | `/governance` | Interactive access control matrices for SQL profiles and tool profiles |
 | **Pricing Calculator** | `/pricing` | Token cost estimator, compute/storage calculators, competitive comparison |
@@ -523,7 +604,7 @@ async with streamablehttp_client("http://localhost:8000/mcp") as (read, write, _
     async with ClientSession(read, write) as session:
         await session.initialize()
 
-        # List all 46 tools
+        # List all 58 tools
         tools = await session.list_tools()
 
         # Run a query
@@ -592,9 +673,10 @@ Edit `deploy/register_mcp_catalog.py` to set your actual app URL before running.
 lakebase-mcp/
 ├── server/
 │   ├── main.py              # FastMCP server, lifespan, tool registration, governance wiring
-│   ├── config.py            # Environment-based configuration (19 vars)
+│   ├── config.py            # Environment-based configuration (21 vars)
 │   ├── db.py                # Async connection pool (S2Z retry + replica routing + query tagging)
-│   ├── auth.py              # Databricks SDK auth (OBO + standard) + UC permissions
+│   ├── auth.py              # Databricks SDK auth (OBO + standard) + UC permissions + credential generation
+│   ├── data_api_client.py   # HTTP client for PostgREST Data API (GET/POST/PATCH/DELETE)
 │   ├── governance/
 │   │   ├── sql_guard.py     # sqlglot-based SQL statement classification (17 types)
 │   │   ├── tool_guard.py    # Per-tool access control (16 categories, 4 profiles)
@@ -612,11 +694,13 @@ lakebase-mcp/
 │   │   ├── monitoring.py   # 3 tools: replication status, WAL stats, CDC monitor
 │   │   ├── quality.py       # 1 tool: profile table
 │   │   ├── feature_store.py # 2 tools: lookup, list feature tables
-│   │   └── uc_governance.py # 4 tools: UC permissions, access check, governance summary, catalog grants
+│   │   ├── uc_governance.py # 4 tools: UC permissions, access check, governance summary, catalog grants
+│   │   ├── data_api.py     # 7 tools: REST CRUD, OpenAPI, configure, status
+│   │   └── roles.py        # 4 tools: role create, Data API access setup, credential generation, role listing
 │   ├── resources/
 │   │   └── insights.py      # memo://insights resource + append tool
 │   ├── prompts/
-│   │   └── templates.py     # 4 prompt templates
+│   │   └── templates.py     # 5 prompt templates
 │   └── utils/
 │       ├── errors.py        # Autoscaling-aware error handling
 │       ├── formatting.py    # Markdown/JSON response formatting
@@ -652,9 +736,9 @@ lakebase-mcp/
 ├── eval/
 │   └── evaluation.xml       # 10 evaluation Q&A pairs
 ├── app.yaml                 # Databricks App configuration (MCP server)
-├── pyproject.toml           # Project metadata (v0.2.0)
+├── pyproject.toml           # Project metadata (v0.4.0)
 ├── requirements.txt         # Pip-compatible requirements (includes sqlglot for SQL governance)
-└── TESTING_SCENARIOS.md     # Comprehensive test scenarios for all 46 tools
+└── TESTING_SCENARIOS.md     # Comprehensive test scenarios for all 58 tools
 ```
 
 ---
@@ -697,6 +781,8 @@ LAKEBASE_E2E_TEST=true MCP_SERVER_URL=http://localhost:8000/mcp \
 | `LAKEBASE_POOL_MAX` | `10` | Maximum pool connections |
 | `LAKEBASE_POOL_MAX_LIFETIME` | `300` | Max connection age (seconds) |
 | `LAKEBASE_POOL_MAX_IDLE` | `60` | Max idle time before eviction (seconds) |
+| `LAKEBASE_DATA_API_URL` | *(auto-detected)* | Override Data API base URL (normally auto-detected from project metadata) |
+| `LAKEBASE_DATA_API_REGION` | *(auto-detected)* | Override region for Data API URL construction |
 
 ---
 
@@ -734,6 +820,22 @@ LAKEBASE_E2E_TEST=true MCP_SERVER_URL=http://localhost:8000/mcp \
 >
 > Continuous sync pipeline created. The `analytics.ml.customer_features` Delta table will stream changes to Lakebase. Use `lakebase_lookup_features` for sub-millisecond lookups.
 
+### Set Up Data API Access
+
+> **You**: Set up REST API access for my service principal on the production database.
+>
+> **Agent**: *Calls `lakebase_data_api_status` -> `lakebase_create_db_role` -> `lakebase_setup_data_api_access` -> `lakebase_data_api_configure`*
+>
+> Done. I've created an OAuth role for your service principal, granted it SELECT/INSERT/UPDATE/DELETE on the public schema, and enabled the OpenAPI endpoint. You can now query tables via REST at the Data API URL.
+
+### Query via Data API
+
+> **You**: Show me active clients from the REST API, sorted by name.
+>
+> **Agent**: *Calls `lakebase_data_api_get` with table="clients", filters={"status": "eq.active"}, order="name.asc"*
+>
+> Found 42 active clients. Here are the first 10 sorted by name...
+
 ### Profile Data Quality
 
 > **You**: Check the data quality of the orders table.
@@ -765,7 +867,7 @@ Unity Catalog permissions are enforced at the database layer — the server does
 
 ## Known Limitations & Roadmap
 
-The following gaps were identified comparing the MCP implementation against the latest Databricks Lakebase APIs (April 2026):
+The following gaps were identified comparing the MCP implementation against the latest Databricks Lakebase APIs (November 2026):
 
 | # | Severity | Gap | Status |
 |---|----------|-----|--------|
@@ -781,6 +883,9 @@ The following gaps were identified comparing the MCP implementation against the 
 | GAP-10 | LOW | No WAL-based CDC (`wal2delta`) monitoring integration | **Fixed in v0.3.0** — `cdc_monitor` tool added |
 | GAP-11 | LOW | No project-level CRUD (create/delete projects via API) | **Fixed in v0.3.0** — `create_project` and `delete_project` tools added |
 | GAP-12 | LOW | No Lakehouse Sync status polling via REST API | **Fixed in v0.3.0** — `get_synced_table_status` tool provides sync status polling |
+| GAP-13 | HIGH | No Data API (REST) tools — tables only accessible via PostgreSQL wire protocol | **Fixed in v0.4.0** — 7 Data API tools added (GET/POST/PATCH/DELETE, OpenAPI, configure, status) |
+| GAP-14 | HIGH | No role management tools — no way to create OAuth roles or configure Data API access | **Fixed in v0.4.0** — 4 role management tools added |
+| GAP-15 | MEDIUM | No credential generation tool — users can't mint OAuth tokens for external tools | **Fixed in v0.4.0** — `generate_credential` tool added |
 
 Full gap analysis with recommendations: [Confluence — Lakebase MCP Server](https://databricks.atlassian.net/wiki/spaces/FE/pages/6179390187)
 
