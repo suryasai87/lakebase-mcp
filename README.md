@@ -2,13 +2,13 @@
 
 A production-ready [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server for **Databricks Lakebase** — the managed PostgreSQL service on Databricks with autoscaling, branching, and Unity Catalog governance.
 
-This server gives AI agents (Claude, GPT, Copilot, etc.) full control over Lakebase databases: querying, schema exploration, compute management, branching, migrations, Delta sync, data quality profiling, feature serving, REST Data API, and role management — all through a standard MCP interface.
+This server gives AI agents (Claude, GPT, Copilot, etc.) full control over Lakebase databases: querying, schema exploration, compute management, branching, migrations, Delta sync, data quality profiling, feature serving, REST Data API, role management, and end-to-end performance observability — all through a standard MCP interface.
 
 ---
 
 ## Key Capabilities
 
-- **58 tools** across 16 categories — query, schema, projects, branching, compute, migration, sync, synced tables, endpoints, monitoring, quality, feature store, UC governance, Data API, roles, credentials
+- **62 tools** across 17 categories — query, schema, projects, branching, compute, migration, sync, synced tables, endpoints, monitoring, observability, quality, feature store, UC governance, Data API, roles, credentials
 - **5 prompt templates** — guided workflows for exploration, migration, sync, autoscaling tuning, and Data API setup
 - **1 session resource** — `memo://insights` for accumulating observations during analysis
 - **Interactive UI dashboard** — 5-page React + FastAPI app with tool explorer, governance matrix, connection wizard, and pricing calculator
@@ -21,7 +21,7 @@ This server gives AI agents (Claude, GPT, Copilot, etc.) full control over Lakeb
 
 ---
 
-## Tool Reference (58 Tools)
+## Tool Reference (62 Tools)
 
 ### Query Tools (3)
 
@@ -153,6 +153,16 @@ This server gives AI agents (Claude, GPT, Copilot, etc.) full control over Lakeb
 | `lakebase_setup_data_api_access` | Grant authenticator role, schema USAGE, and table privileges for Data API access — full setup in one call |
 | `lakebase_generate_credential` | Generate a short-lived (1-hour) OAuth token for PostgreSQL or Data API access. Redacted by default |
 | `lakebase_list_db_roles` | List all Postgres roles with login capabilities and group memberships. Excludes system roles by default |
+
+### Observability Tools (5)
+
+| Tool | Description |
+|------|-------------|
+| `lakebase_performance_metrics` | Latency percentile stats (p50/p90/p99/mean/max) for all operations. Filter by layer: `tool_call` (end-to-end), `sql_query`/`sql_readonly` (database), `data_api` (REST), `connection` (pool). Configurable time window |
+| `lakebase_slow_operations` | List slowest operations above a threshold, sorted by duration. Shows operation type, SQL prefix, HTTP status codes, and row counts. Use to identify bottlenecks |
+| `lakebase_error_rates` | Error counts and rates per operation. Identifies unreliable endpoints or tools at a glance |
+| `lakebase_server_health` | High-level health dashboard: uptime, total operations, error rate, metric buffer usage, and last-60-seconds summary |
+| `lakebase_reset_metrics` | Clear all collected metrics for a clean baseline after config changes or deployments |
 
 ### Insights (1 tool + 1 resource)
 

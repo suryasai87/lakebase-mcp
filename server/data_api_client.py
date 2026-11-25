@@ -11,12 +11,14 @@ Read replicas use the replica endpoint host; writes to replicas fail with HTTP 4
 """
 
 import logging
+import time
 from typing import Any, Optional
 from urllib.parse import urlencode
 
 import httpx
 
 from server.config import config
+from server.observability import record_span, OperationType
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +90,36 @@ class LakebaseDataAPIClient:
         except Exception:
             return resp.text
 
+    async def _timed_request(
+        self, method: str, op_name: str, url: str, **kwargs
+    ) -> Any:
+        """Execute an HTTP request with observability timing."""
+        client = await self._get_client()
+        t0 = time.perf_counter()
+        success = True
+        status_code = 0
+        try:
+            resp = await getattr(client, method)(url, **kwargs)
+            status_code = resp.status_code
+            result = await self._handle_response(resp)
+            return result
+        except DataAPIError as e:
+            success = False
+            status_code = e.status_code
+            raise
+        except Exception:
+            success = False
+            raise
+        finally:
+            duration = (time.perf_counter() - t0) * 1000
+            record_span(
+                OperationType.DATA_API,
+                op_name,
+                duration,
+                success=success,
+                metadata={"method": method.upper(), "status_code": status_code},
+            )
+
     async def get(
         self,
         schema: str,
@@ -114,23 +146,20 @@ class LakebaseDataAPIClient:
         if offset is not None:
             params["offset"] = str(offset)
 
-        client = await self._get_client()
-        resp = await client.get(url, params=params)
-        return await self._handle_response(resp)
+        return await self._timed_request(
+            "get", f"GET:{schema}.{table}", url, params=params
+        )
 
     async def insert(
         self, schema: str, table: str, rows: list[dict[str, Any]]
     ) -> Any:
         """POST one or more rows into a table."""
         url = self._build_url(schema, table)
-        client = await self._get_client()
         body = rows[0] if len(rows) == 1 else rows
-        resp = await client.post(
-            url,
-            json=body,
-            headers={"Prefer": "return=representation"},
+        return await self._timed_request(
+            "post", f"POST:{schema}.{table}", url,
+            json=body, headers={"Prefer": "return=representation"},
         )
-        return await self._handle_response(resp)
 
     async def update(
         self,
@@ -141,27 +170,22 @@ class LakebaseDataAPIClient:
     ) -> Any:
         """PATCH rows matching filters."""
         url = self._build_url(schema, table)
-        client = await self._get_client()
-        resp = await client.patch(
-            url,
-            params=filters,
-            json=data,
+        return await self._timed_request(
+            "patch", f"PATCH:{schema}.{table}", url,
+            params=filters, json=data,
             headers={"Prefer": "return=representation"},
         )
-        return await self._handle_response(resp)
 
     async def delete(
         self, schema: str, table: str, filters: dict[str, str]
     ) -> Any:
         """DELETE rows matching filters."""
         url = self._build_url(schema, table)
-        client = await self._get_client()
-        resp = await client.delete(url, params=filters)
-        return await self._handle_response(resp)
+        return await self._timed_request(
+            "delete", f"DELETE:{schema}.{table}", url, params=filters
+        )
 
     async def get_openapi_schema(self) -> Any:
         """GET /openapi.json — requires OpenAPI to be enabled in Data API settings."""
         url = f"{self._base_url}/openapi.json"
-        client = await self._get_client()
-        resp = await client.get(url)
-        return await self._handle_response(resp)
+        return await self._timed_request("get", "GET:openapi_schema", url)

@@ -1,4 +1,4 @@
-"""Test Tool-Level Access Control — all 57 tools across all 4 profiles.
+"""Test Tool-Level Access Control — all 62 tools across all 4 profiles.
 
 Tests tool categories, profile definitions, ToolAccessPolicy, allow/deny lists,
 category overrides, and individual tool overrides.
@@ -24,10 +24,10 @@ class TestToolCategories:
     """Verify category definitions are complete and correct."""
 
     def test_total_categories(self):
-        assert len(TOOL_CATEGORIES) == 25
+        assert len(TOOL_CATEGORIES) == 26
 
     def test_total_tools(self):
-        assert len(ALL_TOOLS) == 57
+        assert len(ALL_TOOLS) == 62
 
     def test_no_duplicate_tools(self):
         all_tools_flat = [t for tools in TOOL_CATEGORIES.values() for t in tools]
@@ -166,6 +166,15 @@ class TestToolCategories:
             "lakebase_delete_endpoint",
         }
 
+    def test_observability_category(self):
+        assert set(TOOL_CATEGORIES["observability"]) == {
+            "lakebase_performance_metrics",
+            "lakebase_slow_operations",
+            "lakebase_error_rates",
+            "lakebase_server_health",
+            "lakebase_reset_metrics",
+        }
+
     def test_credential_management_category(self):
         assert set(TOOL_CATEGORIES["credential_management"]) == {
             "lakebase_rotate_credentials",
@@ -188,8 +197,8 @@ class TestToolProfiles:
         expected = [
             "sql_query", "schema_read", "project_read", "branch_read",
             "compute_read", "sync_read", "synced_tables_read", "endpoint_read",
-            "data_api_read", "role_read", "monitoring", "quality", "feature_read",
-            "insight", "uc_governance",
+            "data_api_read", "role_read", "monitoring", "observability",
+            "quality", "feature_read", "insight", "uc_governance",
         ]
         assert TOOL_PROFILES["read_only"] == expected
 
@@ -202,8 +211,8 @@ class TestToolProfiles:
             "branch_write", "compute_read", "compute_write", "migration",
             "sync_read", "sync_write", "synced_tables_read", "synced_tables_write",
             "endpoint_read", "endpoint_write", "data_api_read", "data_api_write",
-            "role_read", "role_write", "monitoring", "quality", "feature_read",
-            "insight", "uc_governance",
+            "role_read", "role_write", "monitoring", "observability",
+            "quality", "feature_read", "insight", "uc_governance",
         ]
         assert TOOL_PROFILES["developer"] == expected
 
@@ -391,6 +400,11 @@ class TestFullToolMatrixReadOnly:
         "lakebase_replication_status",
         "lakebase_wal_statistics",
         "lakebase_cdc_monitor",
+        "lakebase_performance_metrics",
+        "lakebase_slow_operations",
+        "lakebase_error_rates",
+        "lakebase_server_health",
+        "lakebase_reset_metrics",
         "lakebase_profile_table",
         "lakebase_lookup_features",
         "lakebase_list_feature_tables",
@@ -438,7 +452,7 @@ class TestFullToolMatrixReadOnly:
         assert policy.is_tool_allowed(tool) is False, f"{tool} should be DENIED in read_only"
 
     def test_complete_coverage(self, policy):
-        """All 57 tools are covered in either ALLOWED or DENIED."""
+        """All 62 tools are covered in either ALLOWED or DENIED."""
         covered = set(self.ALLOWED + self.DENIED)
         assert covered == set(ALL_TOOLS), f"Missing tools: {set(ALL_TOOLS) - covered}"
 

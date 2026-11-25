@@ -1,7 +1,7 @@
 [project]
 name = "lakebase-mcp"
-version = "0.4.0"
-description = "Databricks Lakebase MCP Server for AI Agents — Autoscaling-Aware + Data API"
+version = "0.5.0"
+description = "Databricks Lakebase MCP Server for AI Agents — Autoscaling-Aware + Data API + Observability"
 requires-python = ">=3.11"
 dependencies = [
     "mcp>=1.9.0",

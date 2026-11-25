@@ -1,9 +1,10 @@
 """Lakebase MCP Server — main entry point.
 
 Merged: base server + autoscaling compute tools + replica pool initialization.
-57 tools, 5 prompts, 1 resource, dual-layer governance, UC permissions, Data API.
+62 tools, 5 prompts, 1 resource, dual-layer governance, UC permissions, Data API, observability.
 """
 import os
+import time
 import logging
 from contextlib import asynccontextmanager
 from mcp.server.fastmcp import FastMCP
@@ -12,6 +13,7 @@ from starlette.routing import Route
 from server.config import config
 from server.db import pool
 from server.governance.policy import build_governance_policy
+from server.observability import record_span, OperationType
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -105,6 +107,7 @@ from server.tools.feature_store import register_feature_store_tools
 from server.tools.uc_governance import register_uc_governance_tools
 from server.tools.data_api import register_data_api_tools
 from server.tools.roles import register_role_tools
+from server.tools.observability import register_observability_tools
 from server.resources.insights import register_insight_resources
 from server.prompts.templates import register_prompts
 
@@ -123,6 +126,7 @@ register_feature_store_tools(mcp)
 register_uc_governance_tools(mcp)       # UC permissions & governance tools
 register_data_api_tools(mcp, governance)    # Data API REST tools
 register_role_tools(mcp, governance)        # Role management & Data API access setup
+register_observability_tools(mcp, governance)  # Performance metrics & server health
 register_insight_resources(mcp)
 register_prompts(mcp)
 
@@ -144,7 +148,17 @@ def _apply_tool_governance(mcp_instance: FastMCP):
         allowed, error_msg = governance.check_tool_access(name)
         if not allowed:
             return [{"type": "text", "text": f"Error: {error_msg}"}]
-        return await original_call_tool(name, arguments, context, convert_result)
+        t0 = time.perf_counter()
+        success = True
+        try:
+            result = await original_call_tool(name, arguments, context, convert_result)
+            return result
+        except Exception:
+            success = False
+            raise
+        finally:
+            duration = (time.perf_counter() - t0) * 1000
+            record_span(OperationType.TOOL_CALL, name, duration, success=success)
 
     mcp_instance._tool_manager.call_tool = governed_call_tool
     logger.info(

@@ -1,9 +1,11 @@
 """Async PostgreSQL connection pool for Lakebase with autoscaling-aware retry.
 
 Merged: base pool + Gap 1 (scale-to-zero retry) + Gap 4 (read replica routing).
+Instrumented: all queries and connections emit observability spans.
 """
 import logging
 import asyncio
+import time
 from contextlib import asynccontextmanager
 from typing import Any, AsyncGenerator, Optional
 
@@ -12,6 +14,7 @@ from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
 
 from server.config import config
+from server.observability import record_span, OperationType
 
 logger = logging.getLogger(__name__)
 
@@ -127,13 +130,31 @@ class LakebasePool:
         """Execute a SQL query (read-write) and return results as list of dicts."""
         effective_max = max_rows or config.max_rows
         tagged_sql = f"/* lakebase_mcp:{tool_name} */ {sql}" if tool_name else sql
-        async with self.connection() as conn:
-            async with conn.cursor() as cur:
-                await cur.execute(tagged_sql, params, prepare=True)
-                if cur.description:
-                    rows = await cur.fetchmany(effective_max)
-                    return [dict(row) for row in rows]
-                return [{"affected_rows": cur.rowcount}]
+        t0 = time.perf_counter()
+        success = True
+        row_count = 0
+        try:
+            async with self.connection() as conn:
+                async with conn.cursor() as cur:
+                    await cur.execute(tagged_sql, params, prepare=True)
+                    if cur.description:
+                        rows = await cur.fetchmany(effective_max)
+                        row_count = len(rows)
+                        return [dict(row) for row in rows]
+                    row_count = cur.rowcount
+                    return [{"affected_rows": cur.rowcount}]
+        except Exception:
+            success = False
+            raise
+        finally:
+            duration = (time.perf_counter() - t0) * 1000
+            record_span(
+                OperationType.SQL_QUERY,
+                tool_name or "execute_query",
+                duration,
+                success=success,
+                metadata={"row_count": row_count, "sql_prefix": sql[:80]},
+            )
 
     async def execute_readonly(
         self, sql: str, params: tuple = None, max_rows: int = None,
@@ -142,15 +163,32 @@ class LakebasePool:
         """Execute query in a read-only transaction, routed to replica if available."""
         effective_max = max_rows or config.max_rows
         tagged_sql = f"/* lakebase_mcp:{tool_name} */ {sql}" if tool_name else sql
-        async with self.connection(prefer_replica=True) as conn:
-            async with conn.transaction():
-                await conn.execute("SET TRANSACTION READ ONLY")
-                async with conn.cursor() as cur:
-                    await cur.execute(tagged_sql, params)
-                    if cur.description:
-                        rows = await cur.fetchmany(effective_max)
-                        return [dict(row) for row in rows]
-                    return []
+        t0 = time.perf_counter()
+        success = True
+        row_count = 0
+        try:
+            async with self.connection(prefer_replica=True) as conn:
+                async with conn.transaction():
+                    await conn.execute("SET TRANSACTION READ ONLY")
+                    async with conn.cursor() as cur:
+                        await cur.execute(tagged_sql, params)
+                        if cur.description:
+                            rows = await cur.fetchmany(effective_max)
+                            row_count = len(rows)
+                            return [dict(row) for row in rows]
+                        return []
+        except Exception:
+            success = False
+            raise
+        finally:
+            duration = (time.perf_counter() - t0) * 1000
+            record_span(
+                OperationType.SQL_READONLY,
+                tool_name or "execute_readonly",
+                duration,
+                success=success,
+                metadata={"row_count": row_count, "sql_prefix": sql[:80]},
+            )
 
 
 pool = LakebasePool()
